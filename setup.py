@@ -10,6 +10,6 @@ setup(
     ],
     install_requires=[
         'torch>=1.4',
-        'pytorch-lighting'
+        'pytorch-lightning'
     ]
 )
