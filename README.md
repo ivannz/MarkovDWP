@@ -15,7 +15,7 @@ cd MarkovDWP
 pip install -e .
 ```
 
-The base framework will be `pytorch-lighting`.
+The base stack will be `python>=3.8`, `torch>=1.4` and `pytorch-lighting` as the framework.
 
 The repo has the following structure:
 * `markovdwp` -- the package with method implementations and the core experimentation backend.
