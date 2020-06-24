@@ -14,6 +14,7 @@ setup(
         'markovdwp.source.mnist',
         'markovdwp.source.mnist.models',
         'markovdwp.source.utils',
+        'markovdwp.utils',
     ],
     install_requires=[
         'torch>=1.4',
