@@ -103,12 +103,31 @@ def train(gpus, parameters, logger=None):
     return pl_module.core.cpu().eval()
 
 
+def sanitize_seed(seed):
+    if seed is None:
+        return seed
+
+    try:
+        return int(seed)
+
+    except ValueError:
+        if seed != 'deterministic':
+            raise TypeError('Seed can be either `None`, and int,'
+                            f' or `deterministic`. Got `{seed}`.')
+
+        from sys import maxsize
+        from random import randrange
+
+        return randrange(0, maxsize)
+
+
 # python -m 'markovdwp.source' <manifest> --gpus 2 3 
 def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
     breakpoint() if debug else None
 
-    # set torch's seed
+    seed = sanitize_seed(seed)
     if seed is not None:
+        # seed torch's prngs
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -159,6 +178,10 @@ parser.add_argument(
     help='The path where to store the trained model under a unique name.')
 
 parser.add_argument(
+    '--seed', required=False, default=None,
+    help='PRNG seed to use in the experiments.')
+
+parser.add_argument(
     '--gpus', type=int, nargs='+', required=False, default=None,
     help='Device ids to occupy by the experiment.')
 
@@ -171,6 +194,6 @@ parser.add_argument(
     help='Enter trace mode.')
 
 # parser.add_argument('--no-save-optim', dest='save_optim', action='store_false')
-parser.set_defaults(debug=False, tag=None, gpus=None)
+parser.set_defaults(debug=False, seed=None, tag=None, gpus=None)
 
 main(**vars(parser.parse_args()))
