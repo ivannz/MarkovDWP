@@ -1,7 +1,7 @@
 {
     "dataset": {
         "name": "CIFAR100",
-        "root": "/Users/ivannazarov/Github/MarkovDWP/data",
+        "root": null,
         "augmentation": true,
         "train_size": null,
         "random_state": null
@@ -11,13 +11,13 @@
             "batch_size": 256,
             "shuffle": true,
             "pin_memory": true,
-            "num_workers": 3
+            "num_workers": 8
         },
         "test": {
-            "batch_size": 512,
+            "batch_size": 256,
             "shuffle": false,
             "pin_memory": true,
-            "num_workers": 3
+            "num_workers": 8
         }
     },
     "trainer": {
