@@ -1,13 +1,14 @@
 import os
 import gzip
+import time
 import torch
 
 import json
-import logging
 import argparse
+import tempfile
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
@@ -18,11 +19,15 @@ from .utils.runtime import get_instance
 
 def get_datasets(name, root, augmentation=False,
                  train_size=None, random_state=None):
-    assert name in ('MNIST', 'CIFAR100')
+    assert name in ('MNIST', 'CIFAR100', 'CIFAR10')
 
     if name == 'MNIST':
         from .mnist.dataset import MNIST_Train as Train
         from .mnist.dataset import MNIST_Test as Test
+
+    if name == 'CIFAR10':
+        from .cifar.dataset import CIFAR10_Train as Train
+        from .cifar.dataset import CIFAR10_Test as Test
 
     if name == 'CIFAR100':
         from .cifar.dataset import CIFAR100_Train as Train
@@ -107,7 +112,7 @@ def train(gpus, parameters, logger=None):
 
 
 # python -m 'markovdwp.source' <manifest> --gpus 2 3 
-def main(manifest, gpus, tag=None, debug=False):
+def main(manifest, target, gpus=[3], tag=None, debug=False):
     breakpoint() if debug else None
 
     manifest = os.path.abspath(os.path.normpath(manifest))
@@ -115,35 +120,30 @@ def main(manifest, gpus, tag=None, debug=False):
     if not (os.path.isfile(manifest) and ext == '.json'):
         raise TypeError(manifest)
 
-    if tag is not None:
-        experiment = f'{tag}__{experiment}'
-
-    root = os.path.dirname(manifest)
-
-    # setup file reporting
-    logging.basicConfig(
-        filename=os.path.join(root, 'report.log'), style='{',
-        format='{asctime:24} {levelname:12} ' +
-               experiment + ' {name} {message}',
-        level=logging.INFO
-    )
-
-    # read the config
+    # open the config
     config = json.load(open(manifest, 'tr'))
 
-    target = os.path.join(root, 'result')
-    os.makedirs(target, exist_ok=True)  # once created it is kept
+    # save under a random name if target is a directory
+    if os.path.isdir(target):
+        # > Caller is responsible for deleting the [temporary] file
+        # > when done with it.
+        # -- We close it, but never delete it
+        fid, target = tempfile.mkstemp(
+            dir=target, prefix=tag, suffix='.gz')
+        os.close(fid)
+
+    elif os.path.exists(target):
+        raise ValueError(f'`{target}` already exists! Refusing to proceed.')
 
     # train the model
-    model = train(gpus, config, TensorBoardLogger(
-        os.path.join(target, 'tb-logs'), name=experiment))
+    model = train(gpus, config, WandbLogger())
 
     # store the model next to the manifest
-    filename = os.path.join(target, experiment + '.gz')
-    with gzip.open(filename, 'wb', compresslevel=9) as fout:
+    with gzip.open(target, 'wb', compresslevel=9) as fout:
         torch.save({
+            '__dttm__': time.strftime('%Y%m%d %H%M%S'),
+            'config': config,
             'state': model.state_dict(),
-            'config': config
         }, fout)
 
 
@@ -154,6 +154,10 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     'manifest', type=str,
     help='The manifest of the experiment.')
+
+parser.add_argument(
+    'target', type=str,
+    help='The path where to store the trained model under a unique name.')
 
 parser.add_argument(
     '--gpus', type=int, nargs='+', required=False, default=None,
@@ -170,12 +174,4 @@ parser.add_argument(
 # parser.add_argument('--no-save-optim', dest='save_optim', action='store_false')
 parser.set_defaults(debug=False, tag=None, gpus=None)
 
-try:
-    main(**vars(parser.parse_args()))
-
-except Exception as e:
-    logging.exception(repr(e))
-    raise
-
-else:
-    logging.info('complete')
+main(**vars(parser.parse_args()))

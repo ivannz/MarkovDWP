@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 import pytorch_lightning as pl
 import torch.nn.functional as F
@@ -73,9 +72,14 @@ class ClassificationRuntime(pl.LightningModule):
 
         y, log_p = outputs['y'], outputs['log_p']
         y_pred = log_p.argmax(-1)
+
         metrics = {
-            f'{subprefix}task.nll': -sum(log_p[torch.arange(len(y)), y]),
-            f'{subprefix}task.accuracy': float(sum(y_pred == y)) / len(y),
+            f'{subprefix}task.nll':
+                -sum(log_p[torch.arange(len(y)), y]),
+
+            f'{subprefix}task.accuracy':
+                float(sum(y_pred == y)) / len(y),
         }
 
-        return {f'{prefix}_loss': metrics[f'{subprefix}task.nll'], 'log': metrics}
+        return {f'{prefix}_loss': metrics[f'{subprefix}task.nll'],
+                'log': metrics}
