@@ -79,14 +79,6 @@ def get_trainer(*, gpus, logger, max_epochs=0, **kwargs):
 
 # coef=..., lr=options['lr'], max_epochs=options['lr_max_epochs']
 def train(gpus, parameters, logger=None):
-    # set torch's seed
-    if parameters.get('__seed__') is not None:
-        seed = int(parameters['__seed__'])
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-
-        torch.manual_seed(seed)
-
     pl_module = ClassificationRuntime(
         get_instance(**parameters['model']), **parameters['options'])
 
@@ -112,8 +104,14 @@ def train(gpus, parameters, logger=None):
 
 
 # python -m 'markovdwp.source' <manifest> --gpus 2 3 
-def main(manifest, target, gpus=[3], tag=None, debug=False):
+def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
     breakpoint() if debug else None
+
+    # set torch's seed
+    if seed is not None:
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
     manifest = os.path.abspath(os.path.normpath(manifest))
     experiment, ext = os.path.splitext(os.path.basename(manifest))
@@ -142,6 +140,7 @@ def main(manifest, target, gpus=[3], tag=None, debug=False):
     with gzip.open(target, 'wb', compresslevel=9) as fout:
         torch.save({
             '__dttm__': time.strftime('%Y%m%d %H%M%S'),
+            '__seed__': seed,
             'config': config,
             'state': model.state_dict(),
         }, fout)
