@@ -13,10 +13,10 @@ def linear(t, t0=0, t1=100, v0=1., v1=0.):
 
 
 class ClassificationRuntime(pl.LightningModule):
-    def __init__(self, core, *, coef, lr, lr_max_epochs):
+    def __init__(self, core, *, coef, lr):
         super().__init__()
         self.core = core
-        self.coef, self.lr, self.lr_max_epochs = coef, lr, lr_max_epochs
+        self.coef, self.lr = coef, lr
 
     def forward(self, input):
         return self.core(input)
@@ -54,7 +54,7 @@ class ClassificationRuntime(pl.LightningModule):
         optim = torch.optim.Adam(self.parameters(), lr=self.lr)
 
         sched = torch.optim.lr_scheduler.LambdaLR(
-            optim, partial(linear, t0=0, t1=self.lr_max_epochs))
+            optim, partial(linear, t0=0, t1=self.trainer.max_epochs))
 
         return [optim], [{'scheduler': sched, 'monitor': 'loss'}]
 

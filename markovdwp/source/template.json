@@ -33,7 +33,6 @@
     },
     "options": {
         "lr": 1e-3,
-        "lr_max_epochs": 300,
         "coef": {
             "task.nll": 1.0,
             "model": 1e-4
