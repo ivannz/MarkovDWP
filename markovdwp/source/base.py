@@ -75,7 +75,7 @@ class ClassificationRuntime(pl.LightningModule):
 
         metrics = {
             f'{subprefix}task.nll':
-                -sum(log_p[torch.arange(len(y)), y]),
+                -log_p[torch.arange(len(y)), y].mean(),
 
             f'{subprefix}task.accuracy':
                 float(sum(y_pred == y)) / len(y),
