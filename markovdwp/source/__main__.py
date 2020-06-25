@@ -146,7 +146,7 @@ def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
         # > when done with it.
         # -- We close it, but never delete it
         fid, target = tempfile.mkstemp(
-            dir=target, prefix=tag, suffix='.gz')
+            dir=target, suffix='.gz', prefix=f'{tag}__' if tag else tag)
         os.close(fid)
 
     elif os.path.exists(target):
