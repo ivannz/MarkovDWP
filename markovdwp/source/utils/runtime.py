@@ -23,3 +23,10 @@ def get_class(name):
 def get_instance(*args, cls, **options):
     """Locate and create a `cls` instance."""
     return get_class(cls)(*args, **options)
+
+
+def get_qualname(cls):
+    """Get a qualifying name of a type."""
+    x = get_class(cls)
+    m, n = x.__module__, x.__name__
+    return m + ('.' if m else '') + n
