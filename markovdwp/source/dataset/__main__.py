@@ -2,15 +2,17 @@ import os
 
 import time
 import tqdm
-import gzip
 import json
 import tempfile
 import argparse
 
 
 import torch
+from torch.nn import Conv2d
+from torch.nn.modules.conv import _ConvNd
 
 from ..utils.runtime import get_instance, get_qualname
+from ...utils.io import load, as_buffer
 
 
 def enumerate_snapshots(path, ext='.gz'):
@@ -27,31 +29,15 @@ def enumerate_snapshots(path, ext='.gz'):
         yield snapshot
 
 
-def conv_filters(module, cls=torch.nn.Conv2d, prefix=''):
+def conv_filters(module, cls=Conv2d, prefix=''):
     """Collect filters from the convolutional layers of the specified model."""
-    assert issubclass(cls, torch.nn.modules.conv._ConvNd)
+    assert issubclass(cls, _ConvNd)
 
     for name, mod in module.named_modules(prefix=prefix):
         if not isinstance(mod, cls):
             continue
 
         yield name, mod.weight.cpu().detach().clone()
-
-
-def load(snapshot):
-    with gzip.open(snapshot, 'rb') as fin:
-        return torch.load(fin, map_location=torch.device('cpu'))
-
-
-def buffer(tensor):
-    # assumes that we can concatenate storage! see unit test
-    with tempfile.NamedTemporaryFile('rb') as fout:
-        # use the temp file as storage for torch tensor
-        storage = tensor.storage().from_file(
-            fout.name, shared=True, size=tensor.numel())
-
-        torch.Tensor(storage).copy_(tensor.flatten())
-        return fout.read()
 
 
 def main(target, root, force=False, debug=False):
@@ -77,8 +63,9 @@ def main(target, root, force=False, debug=False):
     # create tensor storage vault and commit the master model
     vault, sources = {}, [filename]
     for name, weight in conv_filters(model):
-        fid, vault[name] = tempfile.mkstemp(dir=target, prefix='v', suffix='.bin')
-        open(fid, 'ab').write(buffer(weight))
+        fid, vault[name] = tempfile.mkstemp(
+            dir=target, prefix='v', suffix='.bin')
+        open(fid, 'ab').write(as_buffer(weight))
 
     # check that all models have exactly the same config and commit them
     for filename in tqdm.tqdm(filenames, desc='fetching datasets'):
@@ -87,7 +74,7 @@ def main(target, root, force=False, debug=False):
 
         model.load_state_dict(snapshot['state'], strict=True)
         for name, weight in conv_filters(model):
-            open(vault[name], 'ab').write(buffer(weight))
+            open(vault[name], 'ab').write(as_buffer(weight))
 
         sources.append(filename)
 
@@ -110,7 +97,7 @@ def main(target, root, force=False, debug=False):
 
 
 parser = argparse.ArgumentParser(
-    description='Run one experiment.',
+    description='Preprocess model snapshots into kernel dataset.',
     add_help=True)
 
 parser.add_argument(
