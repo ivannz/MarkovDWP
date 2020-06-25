@@ -78,19 +78,21 @@ def main(target, root, force=False, debug=False):
 
         sources.append(filename)
 
-    # seal the vaults and compile meta info (from the last model)
+    # make vault paths relative and compile meta info (from the last model)
     meta, filters = {}, list(conv_filters(model))
+    common = os.path.commonpath([target, *vault.values()])
     for name, weight in tqdm.tqdm(filters, desc='saving datasets'):
         meta[name] = {
             'shape': (len(sources), *weight.shape),
             'dtype': repr(weight.dtype),
+            'vault': os.path.normpath(vault[name].replace(common, '.'))
         }
 
+    # the meta.json defines the parameters of the dataset
     with open(os.path.join(target, 'meta.json'), 'tw') as fout:
         json.dump({
             '__dttm__': time.strftime('%Y%m%d %H%M%S'),
             'dataset': meta,
-            'vault': vault,
             'config': master,
             'sources': sources,
         }, fout, indent=2)

@@ -70,7 +70,7 @@ class KernelDataset(Dataset):
         storage_type = torch.tensor([], dtype=dtype).storage()
 
         # map the reshaped tensor into RAM (not shared to keep file read-only)
-        storage = storage_type.from_file(self.meta['vault'][source],
+        storage = storage_type.from_file(os.path.join(root, dataset['vault']),
                                          shared=False, size=shape.numel())
         self.tensor = torch.Tensor(storage).reshape(*shape)
 
