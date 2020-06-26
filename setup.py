@@ -18,7 +18,7 @@ setup(
         'markovdwp.utils',
     ],
     install_requires=[
-        'torch>=1.4',
+        'torch>=1.5',
         'torchvision',
         'pytorch-lightning',
         'sklearn',

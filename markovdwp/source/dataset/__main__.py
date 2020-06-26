@@ -6,13 +6,11 @@ import json
 import tempfile
 import argparse
 
-
-import torch
 from torch.nn import Conv2d
 from torch.nn.modules.conv import _ConvNd
 
 from ..utils.runtime import get_instance, get_qualname
-from ...utils.io import load, as_buffer
+from ...utils.io import load, write_file
 
 
 def enumerate_snapshots(path, ext='.gz'):
@@ -65,7 +63,8 @@ def main(target, root, force=False, debug=False):
     for name, weight in conv_filters(model):
         fid, vault[name] = tempfile.mkstemp(
             dir=target, prefix='v', suffix='.bin')
-        open(fid, 'ab').write(as_buffer(weight))
+        write_file(weight, fid, save_size=False)
+        os.close(fid)
 
     # check that all models have exactly the same config and commit them
     for filename in tqdm.tqdm(filenames, desc='fetching datasets'):
@@ -74,7 +73,7 @@ def main(target, root, force=False, debug=False):
 
         model.load_state_dict(snapshot['state'], strict=True)
         for name, weight in conv_filters(model):
-            open(vault[name], 'ab').write(as_buffer(weight))
+            write_file(weight, open(vault[name], 'ab'), save_size=False)
 
         sources.append(filename)
 

@@ -1,8 +1,10 @@
+import io
+import tempfile
 import pytest
 
 import torch
 
-from markovdwp.utils.io import as_buffer
+from markovdwp.utils.io import as_buffer, write_file
 
 
 @pytest.mark.parametrize('n_tensors', [
@@ -18,7 +20,47 @@ def test_buffer(n_tensors):
 
     tensor = torch.stack(tensors, dim=0)
 
-    storage = tensor.storage().from_buffer(b''.join(buffers), 'little')
+    storage = tensor.storage().from_buffer(b''.join(buffers), 'native')
 
     concat = torch.Tensor(storage).reshape_as(tensor)
     assert torch.allclose(concat, tensor)
+
+
+def test_write_file():
+    tensor = torch.ones(16)
+
+    # 1. test in-memory buffer
+    buf = io.BytesIO()
+    write_file(tensor, buf, save_size=False)
+
+    recon = torch.Tensor(tensor.storage().from_buffer(
+        buf.getbuffer(), 'native'))
+    print(recon)
+    assert torch.allclose(recon, tensor)
+
+    # 2. test in-memory buffer
+    buf = io.BytesIO()
+    write_file(tensor, buf, save_size=True)
+
+    recon = torch.Tensor(tensor.storage().from_buffer(
+        buf.getbuffer(), 'native', offset=8))
+    assert torch.allclose(recon, tensor)
+
+    # 3. test file buffer, forget to flush
+    with pytest.raises(RuntimeError):
+        with tempfile.NamedTemporaryFile() as file:
+            write_file(tensor, file, save_size=False)
+
+            # file.flush()
+
+            assert torch.allclose(torch.Tensor(tensor.storage().from_file(
+                file.name, False, tensor.numel())), tensor)
+
+    # 4. test file buffer
+    with tempfile.NamedTemporaryFile() as file:
+        write_file(tensor, file, save_size=False)
+
+        file.flush()
+
+        assert torch.allclose(torch.Tensor(tensor.storage().from_file(
+            file.name, False, tensor.numel())), tensor)
