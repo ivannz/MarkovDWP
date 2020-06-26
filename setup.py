@@ -13,6 +13,7 @@ setup(
         'markovdwp.source.cifar.models',
         'markovdwp.source.mnist',
         'markovdwp.source.mnist.models',
+        'markovdwp.source.svhn',
         'markovdwp.source.dataset',
         'markovdwp.source.utils',
         'markovdwp.utils',

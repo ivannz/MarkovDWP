@@ -19,19 +19,24 @@ from .utils.runtime import get_instance
 
 def get_datasets(name, root, augmentation=False,
                  train_size=None, random_state=None):
-    assert name in ('MNIST', 'CIFAR100', 'CIFAR10')
-
     if name == 'MNIST':
         from .mnist.dataset import MNIST_Train as Train
         from .mnist.dataset import MNIST_Test as Test
 
-    if name == 'CIFAR10':
+    elif name == 'CIFAR10':
         from .cifar.dataset import CIFAR10_Train as Train
         from .cifar.dataset import CIFAR10_Test as Test
 
-    if name == 'CIFAR100':
+    elif name == 'CIFAR100':
         from .cifar.dataset import CIFAR100_Train as Train
         from .cifar.dataset import CIFAR100_Test as Test
+
+    elif name == 'SVHN':
+        from .svhn.dataset import SVHN_Train as Train
+        from .svhn.dataset import SVHN_Test as Test
+
+    else:
+        raise RuntimeError(f'Dataset `{name}` unrecognized.')
 
     train = Train(root, augmentation=augmentation,
                   train_size=train_size,
