@@ -2,7 +2,7 @@
 #
 # Train a number of source models.
 #
-# $ ./source.sh `N` `target` `manifset` `--gpus 3` `--tag cifar100`
+# $ ./source.sh `N` `manifset` `target` `--gpus 3` `--tag cifar100`
 #
 # does the folowing
 #  repeat `N` times:
