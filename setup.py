@@ -8,6 +8,7 @@ setup(
     packages=[
         'markovdwp',
         'markovdwp.priors',
+        'markovdwp.priors.dwp',
         'markovdwp.source',
         'markovdwp.source.cifar',
         'markovdwp.source.cifar.models',
