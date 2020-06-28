@@ -1,14 +1,12 @@
 import torch
+import torch.distributions as dist
 
 import pytorch_lightning as pl
 
-from functools import partial
-from .utils.common import collate
-from ..source.base import linear
-
-
-import torch.distributions as dist
 from torch.distributions.kl import _batch_mahalanobis
+
+from functools import partial
+from ...source.base import linear
 
 
 class NormalARD(dist.Normal):
