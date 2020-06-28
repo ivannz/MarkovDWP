@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch.distributions import Normal, Independent
 
 from torch.nn import Module, Conv2d, ConvTranspose2d
 
@@ -13,10 +14,9 @@ class Encoder(Module):
 
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L251
     """
-    def __init__(self, x_dim=1, z_dim=4, h_dim=64, softplus=True):
+    def __init__(self, x_dim=1, z_dim=4, h_dim=64):
         super().__init__()
         self.x_dim, self.z_dim, self.h_dim = x_dim, z_dim, h_dim
-        self.softplus = softplus
 
         self.features = torch.nn.Sequential(
             Conv2d(1 * x_dim, 1 * h_dim, 3, padding=1),  # don't forget padding
@@ -35,8 +35,8 @@ class Encoder(Module):
         )
 
     def forward(self, input):
-        mu, log_var = torch.chunk(self.features(input), 2, dim=1)
-        return mu, F.softplus(log_var)
+        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
+        return Independent(Normal(loc, F.softplus(logscale)), 3)
 
 
 class Decoder(Module):
@@ -52,10 +52,9 @@ class Decoder(Module):
 
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L211
     """
-    def __init__(self, z_dim=4, x_dim=1, h_dim=64, softplus=True):
+    def __init__(self, z_dim=4, x_dim=1, h_dim=64):
         super().__init__()
         self.z_dim, self.x_dim, self.h_dim = z_dim, x_dim, h_dim
-        self.softplus = softplus
 
         # NB they allow fixing output log_var
         # https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L244
@@ -82,5 +81,5 @@ class Decoder(Module):
         )
 
     def forward(self, input):
-        mu, log_var = torch.chunk(self.features(input), 2, dim=1)
-        return mu, F.softplus(log_var)
+        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
+        return Independent(Normal(loc, F.softplus(logscale)), 3)

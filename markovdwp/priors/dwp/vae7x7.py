@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch.distributions import Normal, Independent
 
 from torch.nn import Module, Conv2d, ConvTranspose2d
 
@@ -32,8 +33,8 @@ class Encoder(Module):
         )
 
     def forward(self, input):
-        mu, log_var = torch.chunk(self.features(input), 2, dim=1)
-        return mu, F.softplus(log_var)
+        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
+        return Independent(Normal(loc, F.softplus(logscale)), 3)
 
 
 class Decoder(Module):
@@ -68,5 +69,5 @@ class Decoder(Module):
         )
 
     def forward(self, input):
-        mu, log_var = torch.chunk(self.features(input), 2, dim=1)
-        return mu, F.softplus(log_var)
+        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
+        return Independent(Normal(loc, F.softplus(logscale)), 3)
