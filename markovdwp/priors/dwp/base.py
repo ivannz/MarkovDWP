@@ -51,6 +51,14 @@ def beta_scheduler(step, beta):
     return beta
 
 
+def scatter(data, **kwargs):
+    """I dont like this. Viewing code should not reside in model logic."""
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+    ax.scatter(*data.cpu().numpy().T[:2], **kwargs)
+    plt.close()
+    return fig
+
+
 class VAERuntime(pl.LightningModule):
     def __init__(self, encoder, decoder, *, beta, lr, ref_x=None):
         super().__init__()
@@ -117,7 +125,7 @@ class VAERuntime(pl.LightningModule):
             p, _, q = self(self.ref_x)
 
             # V_{x ~ data} E_{z ~ q(z|x) z}
-            activity = q.mean.squeeze().std(0)
+            activity = q.mean.squeeze().std(0).flatten()
 
             # E_{x ~ p(x|z_0)} \log q(z_0|x)
             r = self.decoder(self.ref_z)
@@ -128,6 +136,10 @@ class VAERuntime(pl.LightningModule):
             wandb.log({
                 'vae_src': plot_slices(self.ref_x[:, 0], **self.kw_imshow),
             }, commit=False)
+
+        wandb.log({
+            'lat_z': scatter(q.mean.squeeze())
+        }, commit=False)
 
         wandb.log({
             'vae_rec': plot_slices(p.sample()[:, 0], **self.kw_imshow),
