@@ -42,6 +42,15 @@ def get_range(data, r=0.05, a=0.001):
     return lo - abs(lo) * r - a, hi + abs(hi) * r + a
 
 
+def beta_scheduler(step, beta):
+    if isinstance(beta, dict):
+        if beta['mode'] == 'anneal':
+            t1, v1 = beta['p1']
+            return linear(step, t1=t1, v1=v1, t0=0, v0=0.)
+        raise ValueError(f'Unknown mode `{beta["mode"]}`.')
+    return beta
+
+
 class VAERuntime(pl.LightningModule):
     def __init__(self, encoder, decoder, *, beta, lr, ref_x=None):
         super().__init__()
@@ -74,8 +83,9 @@ class VAERuntime(pl.LightningModule):
         ll = outputs['loglik'].mean()
         kld = outputs['kl'].mean()
 
-        return {'loss': -ll + self.beta * kld,
-                'log': {'loglik': ll, 'kl-div': kld}}
+        beta = beta_scheduler(self.current_epoch, self.beta)
+        return {'loss': -ll + beta * kld,
+                'log': {'loglik': ll, 'kl-div': kld, 'beta': beta}}
 
     def configure_optimizers(self):
         optim = torch.optim.Adam(self.parameters(), lr=self.lr)
