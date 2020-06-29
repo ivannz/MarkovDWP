@@ -43,13 +43,15 @@ def get_range(data, r=0.05, a=0.001):
 
 
 class VAERuntime(pl.LightningModule):
-    def __init__(self, encoder, decoder, *, beta, lr):
+    def __init__(self, encoder, decoder, *, beta, lr, ref_x=None):
         super().__init__()
         self.encoder, self.decoder = encoder, decoder
         self.beta, self.lr = beta, lr
 
         self.register_buffer('nil', torch.tensor(0.))
         self.register_buffer('one', torch.tensor(1.))
+        if isinstance(ref_x, torch.Tensor):
+            self.register_buffer('ref_x', ref_x)
 
     def forward(self, input):
         q = self.encoder(input)
@@ -85,17 +87,17 @@ class VAERuntime(pl.LightningModule):
 
     # callbacks related to filter plotting
     def setup(self, stage='fit'):
-        if hasattr(self, 'ref_x'):
-            return
+        if not hasattr(self, 'ref_x'):
+            sample, *_ = as_tuple(next(iter(self.train_dataloader())))
+            self.register_buffer('ref_x', sample.unsqueeze(1))
 
-        sample, *_ = as_tuple(next(iter(self.train_dataloader())))
-        self.register_buffer('ref_x', sample.unsqueeze(1))
-        with torch.no_grad():
-            r, pi, q = self(self.ref_x)
-        self.register_buffer('ref_z', pi.sample((len(sample),)))
-
-        lo, hi = get_range(sample)
+        lo, hi = get_range(self.ref_x)
         self.kw_imshow = dict(vmax=hi, vmin=lo, cmap=plt.cm.coolwarm)
+
+        if not hasattr(self, 'ref_z'):
+            with torch.no_grad():
+                _, pi, _ = self(self.ref_x)
+            self.register_buffer('ref_z', pi.sample((len(self.ref_x),)))
 
     def on_epoch_end(self):
         self.zero_grad()
