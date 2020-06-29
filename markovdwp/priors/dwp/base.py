@@ -15,7 +15,8 @@ class NormalARD(dist.Normal):
 
 @dist.kl.register_kl(dist.Normal, NormalARD)
 def _kl_normal_normalard(p, q=None):
-    return torch.log1p((p.loc / p.scale).square())
+    # kl-empirical bayes: ard prior optimized over precsion
+    return torch.log1p((p.loc / p.scale.clamp(1e-8)).square()) / 2
 
 
 class MultivariateNormalARD(dist.MultivariateNormal):
@@ -34,22 +35,24 @@ class VAERuntime(pl.LightningModule):
         self.encoder, self.decoder = encoder, decoder
         self.beta, self.lr = beta, lr
 
+        self.register_buffer('nil', torch.tensor(0.))
+        self.register_buffer('one', torch.tensor(1.))
+
     def forward(self, input):
         q = self.encoder(input)
         p = self.decoder(q.rsample())
-        return q, p
+
+        # kl-std normal: factorized std gaussian prior
+        pi = dist.Independent(
+            dist.Normal(self.nil, self.one).expand(q.event_shape), 3)
+        return p, pi, q
 
     def training_step(self, batch, batch_idx):
         if isinstance(batch, (list, tuple)):
             batch, *dontcare = batch  # vae: only input matters
         X = batch.unsqueeze(1)
-        q, p = self(X)
+        p, pi, q = self(X)
 
-        # kl-std normal: factorized std gaussian prior
-        nil, one = torch.tensor(0.).to(X), torch.tensor(1.).to(X)
-        pi = dist.Independent(dist.Normal(nil, one).expand(q.event_shape), 3)
-#         # kl-empirical bayes ard: prior optimized over precsion
-#         pi = dist.Independent(NormalARD(nil, one).expand(q.event_shape), 3)
         return {'loglik': p.log_prob(X), 'kl': dist.kl_divergence(q, pi)}
 
     def training_step_end(self, outputs):
