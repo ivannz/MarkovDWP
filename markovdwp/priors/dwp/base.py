@@ -12,6 +12,8 @@ import wandb
 import matplotlib.pyplot as plt
 from ...source.utils.plotting import plot_slices
 
+from ...utils.vendor.pytorch_lightning import GradInformation
+
 
 class NormalARD(dist.Normal):
     pass
@@ -59,7 +61,7 @@ def scatter(data, **kwargs):
     return fig
 
 
-class VAERuntime(pl.LightningModule):
+class VAERuntime(GradInformation, pl.LightningModule):
     def __init__(self, encoder, decoder, *, beta, lr, ref_x=None):
         super().__init__()
         self.encoder, self.decoder = encoder, decoder
