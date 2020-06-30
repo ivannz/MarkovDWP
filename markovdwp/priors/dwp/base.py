@@ -209,12 +209,13 @@ class SGVBRuntime(VAERuntime):
 
 
 class IWAERuntime(VAERuntime):
-    def __init__(self, encoder, decoder, *, k, beta, lr, ref_x=None):
+    def __init__(self, encoder, decoder, *, k, beta, lr, ref_x=None,
+                 naive_grad=True):
         assert k > 1
 
         super().__init__(encoder=encoder, decoder=decoder,
                          beta=beta, lr=lr, ref_x=ref_x)
-        self.k = k
+        self.k, self.naive_grad = k, naive_grad
 
     def training_step(self, batch, batch_idx):
         if isinstance(batch, (list, tuple)):
@@ -234,7 +235,14 @@ class IWAERuntime(VAERuntime):
             kl.append(pi.log_prob(z) - q.log_prob(z))
 
         log_iw = torch.stack([l + k for l, k in zip(ll, kl)], dim=0)
-        output = {'iwae/elbo': torch.logsumexp(log_iw, dim=0) - log(self.k)}
+
+        # naïve or reverse engineered from the gradient estimator
+        if self.naive_grad:
+            output = {'iwae/elbo': torch.logsumexp(log_iw, dim=0) - log(self.k)}
+
+        else:
+            iw = log_iw.detach().softmax(dim=0)
+            output = {'iwae/elbo': (log_iw * iw).sum(dim=0)}
 
         # compute sgvb for diagnostics and comparison
         with torch.no_grad():
