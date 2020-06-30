@@ -17,6 +17,8 @@ setup(
         'markovdwp.source.dataset',
         'markovdwp.source.utils',
         'markovdwp.utils',
+        'markovdwp.utils.vendor',
+        'markovdwp.utils.vendor.pytorch_lightning',
     ],
     install_requires=[
         'torch>=1.5',
