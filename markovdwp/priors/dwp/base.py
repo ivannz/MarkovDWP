@@ -1,3 +1,5 @@
+from math import log
+
 import torch
 import torch.distributions as dist
 
@@ -66,6 +68,7 @@ class VAERuntime(GradInformation, pl.LightningModule):
         super().__init__()
         self.encoder, self.decoder = encoder, decoder
         self.beta, self.lr = beta, lr
+        self.k = 1  # default k to one in VAE, see Kingma and Welling (2019)
 
         self.register_buffer('nil', torch.tensor(0.))
         self.register_buffer('one', torch.tensor(1.))
@@ -87,15 +90,25 @@ class VAERuntime(GradInformation, pl.LightningModule):
         X = batch.unsqueeze(1)
         p, pi, q = self(X)
 
-        return {'loglik': p.log_prob(X), 'kl': dist.kl_divergence(q, pi)}
+        return {
+            'sgvb/loglik': p.log_prob(X),
+            'sgvb/kl': dist.kl_divergence(q, pi)
+        }
 
     def training_step_end(self, outputs):
-        ll = outputs['loglik'].mean()
-        kld = outputs['kl'].mean()
-
         beta = beta_scheduler(self.current_epoch, self.beta)
-        return {'loss': -ll + beta * kld,
-                'log': {'loglik': ll, 'kl-div': kld, 'beta': beta}}
+
+        ll = outputs['sgvb/loglik'].mean()
+        kl = outputs['sgvb/kl'].mean()
+        elbo = ll - beta * kl
+
+        return {'loss': -elbo,
+                'log': {
+                    'sgvb/elbo': elbo,
+                    'sgvb/loglik': ll,
+                    'sgvb/kl-div': kl,
+                    'sgvb/beta': beta,
+                }}
 
     def configure_optimizers(self):
         optim = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -150,3 +163,98 @@ class VAERuntime(GradInformation, pl.LightningModule):
             'll_x': p.log_prob(self.ref_x).mean().cpu(),
             'll_z': e.log_prob(self.ref_z).mean().cpu(),
         }, commit=False)  # commit with the next call to pl's logger
+
+
+class SGVBRuntime(VAERuntime):
+    def __init__(self, encoder, decoder, *, k, beta, lr, ref_x=None):
+        assert k > 1
+
+        super().__init__(encoder=encoder, decoder=decoder,
+                         beta=beta, lr=lr, ref_x=ref_x)
+        self.k = k
+
+    def training_step(self, batch, batch_idx):
+        if isinstance(batch, (list, tuple)):
+            batch, *dontcare = batch  # vae: only input matters
+        X = batch.unsqueeze(1)
+
+        q = self.encoder(X)
+        pi = dist.Independent(
+            dist.Normal(self.nil, self.one).expand(q.event_shape), 3)
+
+        # (sgvb)_k = E_x E_{S~q^k(z|x)} E_{z~S} log p(x|z) pi(z) / q(z|x)
+        ll = []
+        for k, z in enumerate(q.rsample((self.k,))):
+            ll.append(self.decoder(z).log_prob(X))
+
+        return {
+            'sgvb/loglik': sum(ll) / self.k,
+            'sgvb/kl': dist.kl_divergence(q, pi)
+        }
+
+    def training_step_end(self, outputs):
+        beta = beta_scheduler(self.current_epoch, self.beta)
+
+        ll = outputs['sgvb/loglik'].mean()
+        kl = outputs['sgvb/kl'].mean()
+        elbo = ll - beta * kl
+
+        return {'loss': -elbo,
+                'log': {
+                    'sgvb/elbo': elbo,
+                    'sgvb/loglik': ll,
+                    'sgvb/kl-div': kl,
+                    'sgvb/beta': beta,
+                }}
+
+
+class IWAERuntime(VAERuntime):
+    def __init__(self, encoder, decoder, *, k, beta, lr, ref_x=None):
+        assert k > 1
+
+        super().__init__(encoder=encoder, decoder=decoder,
+                         beta=beta, lr=lr, ref_x=ref_x)
+        self.k = k
+
+    def training_step(self, batch, batch_idx):
+        if isinstance(batch, (list, tuple)):
+            batch, *dontcare = batch  # vae: only input matters
+        X = batch.unsqueeze(1)
+
+        q = self.encoder(X)
+        pi = dist.Independent(
+            dist.Normal(self.nil, self.one).expand(q.event_shape), 3)
+
+        # (iwae)_k = E_x E_{S~q^k(z|x)} log E_{z~S} p(x|z) pi(z) / q(z|x)
+        #  * like (sgvb)_k but E_z and log are interchanged
+        ll, kl = [], []
+        for k, z in enumerate(q.rsample((self.k,))):
+            p = self.decoder(z)
+            ll.append(p.log_prob(X))
+            kl.append(pi.log_prob(z) - q.log_prob(z))
+
+        log_iw = torch.stack([l + k for l, k in zip(ll, kl)], dim=0)
+        output = {'iwae/elbo': torch.logsumexp(log_iw, dim=0) - log(self.k)}
+
+        # compute sgvb for diagnostics and comparison
+        with torch.no_grad():
+            output['sgvb/loglik'] = sum(ll) / self.k
+            output['sgvb/kl'] = dist.kl_divergence(q, pi)
+
+        return output
+
+    def training_step_end(self, outputs):
+        beta = beta_scheduler(self.current_epoch, self.beta)
+
+        ll = outputs['sgvb/loglik'].mean()
+        kl = outputs['sgvb/kl'].mean()
+        elbo = outputs['iwae/elbo'].mean()
+
+        return {'loss': -elbo,
+                'log': {
+                    'iwae/elbo': elbo,
+                    'sgvb/elbo': ll - beta * kl,
+                    'sgvb/loglik': ll,
+                    'sgvb/kl-div': kl,
+                    'sgvb/beta': beta,
+                }}
