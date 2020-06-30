@@ -149,19 +149,19 @@ class VAERuntime(GradInformation, pl.LightningModule):
         if self.current_epoch == 0:
             # commit source slices only once
             wandb.log({
-                'vae_src': plot_slices(self.ref_x[:, 0], **self.kw_imshow),
+                'task/src': plot_slices(self.ref_x[:, 0], **self.kw_imshow),
             }, commit=False)
 
         wandb.log({
-            'lat_z': scatter(q.mean.squeeze())
+            'diag/lat_z': scatter(q.mean.squeeze())
         }, commit=False)
 
         wandb.log({
-            'vae_rec': plot_slices(p.sample()[:, 0], **self.kw_imshow),
-            'vae_gen': plot_slices(r.sample()[:, 0], **self.kw_imshow),
-            **{f'A_u{i}': a for i, a in enumerate(activity.cpu())},
-            'll_x': p.log_prob(self.ref_x).mean().cpu(),
-            'll_z': e.log_prob(self.ref_z).mean().cpu(),
+            'task/rec': plot_slices(p.sample()[:, 0], **self.kw_imshow),
+            'task/gen': plot_slices(r.sample()[:, 0], **self.kw_imshow),
+            **{f'diag/A_u{i}': a for i, a in enumerate(activity.cpu())},
+            'diag/ll_x': p.log_prob(self.ref_x).mean().cpu(),
+            'diag/ll_z': e.log_prob(self.ref_z).mean().cpu(),
         }, commit=False)  # commit with the next call to pl's logger
 
 
