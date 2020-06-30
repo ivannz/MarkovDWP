@@ -27,35 +27,67 @@ class KernelDataset(Dataset):
     source : str
         Specifies convolutions of which layer to load.
 
-    dim : str, or None, default='sio'
-        Specifies dimensions alog which to assume the independence:
-        input channels 'i', output channels 'o', and trained models 'm'.
-        Independence along 'm' is implicit and always enforced.
+    dim : str, or None, default='mio'
+        Specifies dimensions along which to assume the independence:
+        'i' -- input channels, 'o' -- output channels, 'm' -- trained models.
+        Independence along 'm' is implicit and always enforced. For example,
+        for `mo` each element in the dataset will be 'in_channels x *kernel'
+        where `*kernel` is the shape of the spatial dimensions.
 
     min_norm : float, default=1e-2
         Filter the source dataset by the specified minimal ell_2 norm.
 
-    min_norm
-
     Details
     -------
     See `this <https://bochang.me/blog/posts/pytorch-distributions/>`_ post.
-    a thorought investigation into the semantics of these attributes. Briefly,
+    a thorough investigation into the semantics of these attributes. Briefly,
         * `sample_shape` independent and identically distributed
         * `batch_shape` -- independent, not necessarily identically distributed
         * `event_shape` relates to dimensionality of a **single draw**
     """
 
-    def __init__(self, root, source, dim='sio', min_norm=1e-2):
+    @staticmethod
+    def info(root, full=False):
+        """Return basic information about the contents of the source dataset.
+
+        Parameters
+        ----------
+        root : str
+            Path to preprocessed convolutional kernels from trained models.
+
+        full : bool, default=False
+            Whether to return full or partial meta information. If `full`
+            is `False`, then on the part related to the specifications of
+            the stored dataset is returned.
+
+        Returns
+        -------
+        info : dict
+            The meta information dictionary.
+        """
+        metafile = os.path.join(root, 'meta.json')
+        if not os.path.isfile(metafile):
+            raise TypeError(f'Could not find `meta.json` in `{root}`.')
+
+        meta = json.load(open(metafile, 'rt'))
+
+        for name, dataset in meta['dataset'].items():
+            vault = os.path.join(root, dataset['vault'])
+            if not os.path.isfile(vault):
+                raise ValueError(f'Missing vault file for dataset `{name}`.')
+
+        return meta if full else meta['dataset']
+
+    def __init__(self, root, source, dim='mio', min_norm=1e-2):
 
         root = os.path.abspath(root)
         assert os.path.isdir(root)
-        self.dim = get_dim_shape('sio' if dim is None else dim)
+        self.dim = get_dim_shape('mio' if dim is None else dim)
 
         self.source, self.root = source, root
 
         # open the vault
-        self.meta = json.load(open(os.path.join(root, 'meta.json'), 'rt'))
+        self.meta = self.info(root, full=True)
         dataset = self.meta['dataset'][source]
 
         shape = torch.Size(dataset['shape'])
@@ -106,9 +138,10 @@ class KernelDataset(Dataset):
         return len(self.indices)
 
     def __repr__(self):
-        pieces = [self.source]
-        pieces.append(f'kernel={"x".join(map(str, self.kernel_size))}')
+        pieces = [f'source=`{self.source}`']
+        pieces.append(f'kernel={tuple(self.kernel_size)}')
         pieces.append(f'dim={self.dim}')
         pieces.append(f'n_models={len(self.meta["sources"])}')
+        pieces.append(f'root="{self.root}"')
 
-        return f'{type(self).__name__}({", ".join(pieces)})'
+        return type(self).__name__ + '(\n  ' + '\n  '.join(pieces) + '\n)'
