@@ -10,7 +10,7 @@ import argparse
 from torch.nn import Conv2d
 from torch.nn.modules.conv import _ConvNd
 
-from ..utils.runtime import get_instance, get_qualname
+from ..utils.runtime import get_instance
 from ...utils.io import load, write_file
 
 
@@ -39,25 +39,30 @@ def conv_filters(module, cls=Conv2d, prefix=''):
         yield name, mod.weight.cpu().detach().clone()
 
 
-def main(target, root, force=False, debug=False):
+def main(root, tag='', force=False, debug=False):
     breakpoint() if debug else None
 
-    # the first snapshot is processed separately
     primary_filename, *filenames = enumerate_snapshots(root)
-    snapshot = load(primary_filename)
 
-    # determine the primary config
+    # the first snapshot becomes the primary model and is processed separately
+    snapshot = load(primary_filename)
     master = snapshot['config']
+
+    # the pack is created next to `root` under a similar name
+    target = os.path.dirname(primary_filename)
+    target = os.path.join(
+        os.path.dirname(target),
+        'kernels__' + os.path.basename(target)
+        + ('__' if tag else '') + tag
+    )
+    os.makedirs(target, exist_ok=force)
+    if force:
+        # ensure that the directory being overwritten is empty.
+        pass
 
     # load the model
     model = get_instance(**master['model'])
     model.load_state_dict(snapshot['state'], strict=True)
-
-    # create the dataset pack based on model's qualifying name
-    model_name = get_qualname(master['model']['cls'])  # use `model-cls`
-
-    target = os.path.abspath(os.path.join(target, model_name))
-    os.makedirs(target, exist_ok=force)
 
     # create tensor storage vault and commit the master model
     vault, sources = {}, [primary_filename]
@@ -104,7 +109,8 @@ def main(target, root, force=False, debug=False):
 
 
 parser = argparse.ArgumentParser(
-    description='Preprocess model snapshots into kernel dataset.',
+    description='Preprocess model snapshots into kernel dataset, '
+                'stored in an automatically generated directory.',
     add_help=True)
 
 parser.add_argument(
@@ -112,8 +118,8 @@ parser.add_argument(
     help='The directory with stored model snapshots.')
 
 parser.add_argument(
-    'target', type=str,
-    help='The path where to put preprocessed kernel dataset.')
+    '--tag', type=str, required=False,
+    help='Optional suffix for the name of the dataset.')
 
 parser.add_argument(
     '--force', required=False, dest='force', action='store_true',
@@ -123,7 +129,6 @@ parser.add_argument(
     '--debug', required=False, dest='debug', action='store_true',
     help='Enter trace mode.')
 
-# parser.add_argument('--no-save-optim', dest='save_optim', action='store_false')
-parser.set_defaults(force=False, debug=False)
+parser.set_defaults(tag='', force=False, debug=False)
 
 main(**vars(parser.parse_args()))
