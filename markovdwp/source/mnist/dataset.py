@@ -2,16 +2,27 @@ from torchvision import datasets, transforms
 from ..utils.dataset import stratified_split
 
 
+def get_transform(augmentation):
+    assert augmentation in ('none', 'normalize', 'full')
+
+    transform, normalize = [], []
+    if augmentation in ('full', 'normalize'):
+        normalize = [
+            transforms.Normalize((0.5,), (0.5,))
+        ]
+
+    return transforms.Compose([
+        *transform, transforms.ToTensor(), *normalize
+    ])
+
+
 class MNIST_Train:
     """Train sample from the MNIST dataset."""
-    def __new__(cls, root, augmentation=None,
+    def __new__(cls, root, augmentation='normalize',
                 train_size=None, random_state=None):
-        # augmentation is ignored for MNIST
-
-        dataset = datasets.MNIST(root, transform=transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,)),
-        ]), target_transform=None, train=True, download=True)
+        transform = get_transform(augmentation)
+        dataset = datasets.MNIST(root, transform=transform, train=True,
+                                 target_transform=None, download=True)
 
         train, _ = stratified_split(dataset, train_size=train_size,
                                     random_state=random_state)
@@ -20,8 +31,7 @@ class MNIST_Train:
 
 class MNIST_Test:
     """Test sample from the MNIST dataset."""
-    def __new__(cls, root):
-        return datasets.MNIST(root, transform=transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,)),
-        ]), target_transform=None, train=False, download=True)
+    def __new__(cls, root, augmentation='normalize'):
+        transform = get_transform(augmentation)
+        return datasets.MNIST(root, transform=transform, train=False,
+                              target_transform=None, download=True)
