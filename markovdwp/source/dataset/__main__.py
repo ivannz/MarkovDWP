@@ -1,4 +1,5 @@
 import os
+import warnings
 
 import time
 import tqdm
@@ -42,10 +43,10 @@ def main(target, root, force=False, debug=False):
     breakpoint() if debug else None
 
     # the first snapshot is processed separately
-    filename, *filenames = enumerate_snapshots(root)
-    snapshot = load(filename)
+    primary_filename, *filenames = enumerate_snapshots(root)
+    snapshot = load(primary_filename)
 
-    # determine the main config
+    # determine the primary config
     master = snapshot['config']
 
     # load the model
@@ -59,7 +60,7 @@ def main(target, root, force=False, debug=False):
     os.makedirs(target, exist_ok=force)
 
     # create tensor storage vault and commit the master model
-    vault, sources = {}, [filename]
+    vault, sources = {}, [primary_filename]
     for name, weight in conv_filters(model):
         fid, vault[name] = tempfile.mkstemp(
             dir=target, prefix='v', suffix='.bin')
@@ -69,7 +70,12 @@ def main(target, root, force=False, debug=False):
     # check that all models have exactly the same config and commit them
     for filename in tqdm.tqdm(filenames, desc='fetching datasets'):
         snapshot = load(filename)
-        assert snapshot['config'] == master
+        if snapshot['config'] != master:
+            # does not match the primary model
+            warnings.warn(f'Config of `{filename}` does not match the'
+                          f' the primary model `{primary_filename}`.',
+                          RuntimeWarning)
+            continue
 
         model.load_state_dict(snapshot['state'], strict=True)
         for name, weight in conv_filters(model):
