@@ -17,35 +17,14 @@ from .base import ClassificationRuntime
 from .utils.runtime import get_instance
 
 
-def get_datasets(name, root, augmentation=False,
-                 train_size=None, random_state=None):
-    if name == 'MNIST':
-        from .mnist.dataset import MNIST_Train as Train
-        from .mnist.dataset import MNIST_Test as Test
-
-    elif name == 'CIFAR10':
-        from .cifar.dataset import CIFAR10_Train as Train
-        from .cifar.dataset import CIFAR10_Test as Test
-
-    elif name == 'CIFAR100':
-        from .cifar.dataset import CIFAR100_Train as Train
-        from .cifar.dataset import CIFAR100_Test as Test
-
-    elif name == 'SVHN':
-        from .svhn.dataset import SVHN_Train as Train
-        from .svhn.dataset import SVHN_Test as Test
-
-    else:
-        raise RuntimeError(f'Dataset `{name}` unrecognized.')
-
-    train = Train(root, augmentation=augmentation,
-                  train_size=train_size,
-                  random_state=random_state)
-
-    return {'train': train, 'test': Test(root)}
+def get_datasets(datasets):
+    return {
+        name: get_instance(**klass)
+        for name, klass in datasets.items()
+    }
 
 
-def get_dataloaders(datasets, **feeds):
+def get_dataloaders(datasets, feeds):
     return {
         feed: DataLoader(datasets[feed], **settings)
         for feed, settings in feeds.items()
@@ -88,7 +67,7 @@ def train(gpus, parameters, logger=None):
         get_instance(**parameters['model']), **parameters['options'])
 
     feeds = get_dataloaders(
-        get_datasets(**parameters['dataset']), **parameters['feeds'])
+        get_datasets(parameters['dataset']), parameters['feeds'])
 
     pl_trainer = get_trainer(
         gpus=gpus, logger=logger, **parameters['trainer'])
