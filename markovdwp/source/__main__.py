@@ -18,7 +18,7 @@ from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
 from torch.utils.data import DataLoader
 from .base import ClassificationRuntime
-from .utils.runtime import get_instance
+from .utils.runtime import get_instance, get_class
 
 
 def get_datasets(datasets):
@@ -134,6 +134,13 @@ def fix_randomness(seed):
     return deterministic_seed
 
 
+def generate_tags(config):
+    """Make a tag from dataset and model class names."""
+    dataset = get_class(config['dataset']['train']['cls'])
+    model = get_class(config['model']['cls'])
+    return [dataset.__name__, model.__name__]
+
+
 # python -m 'markovdwp.source' <manifest> --gpus 2 3 
 def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
     breakpoint() if debug else None
@@ -161,7 +168,9 @@ def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
         raise ValueError(f'`{target}` already exists! Refusing to proceed.')
 
     # train the model
-    model = train(gpus, config, WandbLogger())
+    model = train(gpus, config, WandbLogger(
+        tags=[*generate_tags(config)]
+    ))
 
     # store the model next to the manifest
     with gzip.open(target, 'wb', compresslevel=9) as fout:
