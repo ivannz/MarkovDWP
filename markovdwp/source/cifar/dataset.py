@@ -1,16 +1,8 @@
-import warnings
-
 from torchvision import datasets, transforms
 from ..utils.dataset import stratified_split
 
 
 def get_transform(augmentation):
-    if isinstance(augmentation, bool):
-        warnings.warn('Bool `augmentation` is deprecated. Please use '
-                      '`normalize` for `False`, `full` for `True` instead.',
-                      DeprecationWarning)
-        augmentation = 'full' if augmentation else 'normalize'
-
     assert augmentation in ('none', 'crop-flip', 'normalize', 'full')
 
     transform, normalize = [], []
