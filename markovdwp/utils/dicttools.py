@@ -51,6 +51,16 @@ def aggregate(dictionary, level=0, sep='.'):
 
 
 def flatten(dictionary, delim='.'):
+    """Depth first redundantly flatten a nested dictionary.
+
+    Arguments
+    ---------
+    dictionary : dict
+        The dictionary to traverse and linearize.
+
+    delim : str, default='.'
+        The delimiter used to indicate nested keys.
+    """
     out = dict()
     for key in dictionary:
         value = dictionary[key]
@@ -62,6 +72,34 @@ def flatten(dictionary, delim='.'):
             out[key] = value
 
     return out
+
+
+def unflatten(dictionary, delim='.'):
+    """Breadth first turn flattened dictionary into a nested one.
+
+    Arguments
+    ---------
+    dictionary : dict
+        The dictionary to traverse and linearize.
+
+    delim : str, default='.'
+        The delimiter used to indicate nested keys.
+    """
+
+    out = defaultdict(dict)
+    # try to maintain curent order of the dictionary
+    for key, value in dictionary.items():
+        key, sep, sub_key = key.partition(delim)
+        if sep:
+            out[key][sub_key] = value
+        else:
+            out[key] = value
+
+    for k, v in out.items():
+        if isinstance(v, dict):
+            out[k] = unflatten(v, delim)
+
+    return dict(out)
 
 
 def override(dictionary, **overrides):
