@@ -92,7 +92,7 @@ class SliceReconstructionLogger(Callback):
             gen = r.sample() if self.sample else r.mean
 
             output.update({
-                'task/gen': plot_slices(gen[:, 0], **self.imshow),
+                'task/gen': plot_slices(gen[:, 0], f_aspect=1., **self.imshow),
                 'diag/ll_z': e.log_prob(ref_z).mean().cpu(),
             })
 

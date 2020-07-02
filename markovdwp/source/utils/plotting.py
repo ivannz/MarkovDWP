@@ -84,14 +84,14 @@ def plot(images, ax=None, f_aspect=1., **kwargs):
     return ax
 
 
-def plot_slices(slices, **kwargs):
+def plot_slices(slices, f_aspect=16/9, **kwargs):
     assert isinstance(slices, torch.Tensor) and slices.dim() == 3
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 8), dpi=120,
                            subplot_kw=dict(xticks=[], yticks=[]))
 
     images = slices.cpu().numpy()[..., np.newaxis]
-    plot(images, ax=ax, f_aspect=16 / 9, **kwargs)
+    plot(images, ax=ax, f_aspect=f_aspect, **kwargs)
     fig.tight_layout()
 
     plt.close()
