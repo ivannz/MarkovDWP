@@ -36,8 +36,9 @@ def _kl_multivariatenormal_multivariatenormalard(p, q=None):
 def beta_scheduler(step, beta):
     if isinstance(beta, dict):
         if beta['mode'] == 'anneal':
+            t0, v0 = beta.get('p0', (0, 0))
             t1, v1 = beta['p1']
-            return linear(step, t1=t1, v1=v1, t0=0, v0=0.)
+            return linear(step, t1=t1, v1=v1, t0=t0, v0=v0)
         raise ValueError(f'Unknown mode `{beta["mode"]}`.')
     return beta
 
