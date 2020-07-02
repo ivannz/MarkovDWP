@@ -10,10 +10,6 @@ from torch.distributions.kl import _batch_mahalanobis
 from functools import partial
 from ...source.base import linear
 
-import wandb
-import matplotlib.pyplot as plt
-from ...source.utils.plotting import plot_slices
-
 from ...utils.vendor.pytorch_lightning import GradInformation
 
 
@@ -37,15 +33,6 @@ def _kl_multivariatenormal_multivariatenormalard(p, q=None):
     return torch.log1p(M) / 2
 
 
-def as_tuple(o):
-    return tuple(o if isinstance(o, (list, tuple)) else (o,))
-
-
-def get_range(data, r=0.05, a=0.001):
-    lo, hi = float(data.min()), float(data.max())
-    return lo - abs(lo) * r - a, hi + abs(hi) * r + a
-
-
 def beta_scheduler(step, beta):
     if isinstance(beta, dict):
         if beta['mode'] == 'anneal':
@@ -53,14 +40,6 @@ def beta_scheduler(step, beta):
             return linear(step, t1=t1, v1=v1, t0=0, v0=0.)
         raise ValueError(f'Unknown mode `{beta["mode"]}`.')
     return beta
-
-
-def scatter(data, **kwargs):
-    """I dont like this. Viewing code should not reside in model logic."""
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    ax.scatter(*data.cpu().numpy().T[:2], **kwargs)
-    plt.close()
-    return fig
 
 
 class VAERuntime(GradInformation, pl.LightningModule):
@@ -117,52 +96,6 @@ class VAERuntime(GradInformation, pl.LightningModule):
             optim, partial(linear, t0=0, t1=self.trainer.max_epochs))
 
         return [optim], [{'scheduler': sched, 'monitor': 'loss'}]
-
-    # callbacks related to filter plotting
-    def setup(self, stage='fit'):
-        if not hasattr(self, 'ref_x'):
-            sample, *_ = as_tuple(next(iter(self.train_dataloader())))
-            self.register_buffer('ref_x', sample.unsqueeze(1))
-
-        lo, hi = get_range(self.ref_x)
-        self.kw_imshow = dict(vmax=hi, vmin=lo, cmap=plt.cm.coolwarm)
-
-        if not hasattr(self, 'ref_z'):
-            with torch.no_grad():
-                _, pi, _ = self(self.ref_x)
-            self.register_buffer('ref_z', pi.sample((len(self.ref_x),)))
-
-    def on_epoch_end(self):
-        self.zero_grad()
-        self.eval()
-        with torch.no_grad():
-            # E_{z ~ q(z|x_0)} \log p(x_0|z)
-            p, _, q = self(self.ref_x)
-
-            # V_{x ~ data} E_{z ~ q(z|x) z}
-            activity = q.mean.squeeze().std(0).flatten()
-
-            # E_{x ~ p(x|z_0)} \log q(z_0|x)
-            r = self.decoder(self.ref_z)
-            e = self.encoder(r.sample())
-
-        if self.current_epoch == 0:
-            # commit source slices only once
-            wandb.log({
-                'task/src': plot_slices(self.ref_x[:, 0], **self.kw_imshow),
-            }, commit=False)
-
-        wandb.log({
-            'diag/lat_z': scatter(q.mean.squeeze())
-        }, commit=False)
-
-        wandb.log({
-            'task/rec': plot_slices(p.sample()[:, 0], **self.kw_imshow),
-            'task/gen': plot_slices(r.sample()[:, 0], **self.kw_imshow),
-            **{f'diag/A_u{i}': a for i, a in enumerate(activity.cpu())},
-            'diag/ll_x': p.log_prob(self.ref_x).mean().cpu(),
-            'diag/ll_z': e.log_prob(self.ref_z).mean().cpu(),
-        }, commit=False)  # commit with the next call to pl's logger
 
 
 class SGVBRuntime(VAERuntime):
