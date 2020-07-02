@@ -5,6 +5,13 @@ from torch.nn import LeakyReLU, MaxPool2d, Flatten, Sequential
 
 
 class CIFARNet:
+    """Vanilla CifarNet from the DWP paper.
+
+    Details
+    -------
+    Usually bias is disabled in layers just before batchnorm. We replicate
+    the model here according to the specs listing in the paper.
+    """
     def __new__(cls, n_classes=10, k=1.):
         # input 3 and output 512 fixed
         head, *rest = map(int, [3, 128 * k, 256 * k, 256 * k, 512])
