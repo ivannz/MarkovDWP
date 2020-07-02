@@ -3,7 +3,6 @@ import wandb
 
 import matplotlib.pyplot as plt
 
-import pytorch_lightning as pl
 from pytorch_lightning.callbacks.base import Callback
 from ...source.utils.plotting import plot_slices
 

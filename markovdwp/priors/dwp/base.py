@@ -43,7 +43,7 @@ def beta_scheduler(step, beta):
 
 
 class VAERuntime(GradInformation, pl.LightningModule):
-    def __init__(self, encoder, decoder, *, beta, lr, ref_x=None):
+    def __init__(self, encoder, decoder, *, beta, lr):
         super().__init__()
         self.encoder, self.decoder = encoder, decoder
         self.beta, self.lr = beta, lr
@@ -51,8 +51,6 @@ class VAERuntime(GradInformation, pl.LightningModule):
 
         self.register_buffer('nil', torch.tensor(0.))
         self.register_buffer('one', torch.tensor(1.))
-        if isinstance(ref_x, torch.Tensor):
-            self.register_buffer('ref_x', ref_x)
 
     def forward(self, input):
         q = self.encoder(input)
@@ -99,11 +97,10 @@ class VAERuntime(GradInformation, pl.LightningModule):
 
 
 class SGVBRuntime(VAERuntime):
-    def __init__(self, encoder, decoder, *, k, beta, lr, ref_x=None):
+    def __init__(self, encoder, decoder, *, k, beta, lr):
         assert k > 1
 
-        super().__init__(encoder=encoder, decoder=decoder,
-                         beta=beta, lr=lr, ref_x=ref_x)
+        super().__init__(encoder=encoder, decoder=decoder, beta=beta, lr=lr)
         self.k = k
 
     def training_step(self, batch, batch_idx):
@@ -142,12 +139,10 @@ class SGVBRuntime(VAERuntime):
 
 
 class IWAERuntime(VAERuntime):
-    def __init__(self, encoder, decoder, *, k, beta, lr, ref_x=None,
-                 naive_grad=True):
+    def __init__(self, encoder, decoder, *, k, beta, lr, naive_grad=True):
         assert k > 1
 
-        super().__init__(encoder=encoder, decoder=decoder,
-                         beta=beta, lr=lr, ref_x=ref_x)
+        super().__init__(encoder=encoder, decoder=decoder, beta=beta, lr=lr)
         self.k, self.naive_grad = k, naive_grad
 
     def training_step(self, batch, batch_idx):
