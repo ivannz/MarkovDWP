@@ -2,11 +2,12 @@ from distutils.core import setup
 
 setup(
     name='MarkovDWP',
-    version='0.3',
+    version='0.4',
     description='''Backend for experiments with Deep Weight Prior''',
     license='MIT License',
     packages=[
         'markovdwp',
+        'markovdwp.nn',
         'markovdwp.priors',
         'markovdwp.priors.dwp',
         'markovdwp.source',
