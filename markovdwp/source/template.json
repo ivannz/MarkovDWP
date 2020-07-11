@@ -1,14 +1,14 @@
 {
     "dataset": {
         "train": {
-            "cls": "<class 'markovdwp.source.cifar.dataset.CIFAR100_Train'>",
+            "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR100_Train'>",
             "root": null,
             "augmentation": "full",
             "train_size": null,
             "random_state": null
         },
         "test": {
-            "cls": "<class 'markovdwp.source.cifar.dataset.CIFAR100_Test'>",
+            "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR100_Test'>",
             "root": null,
             "augmentation": "normalize"
         }
