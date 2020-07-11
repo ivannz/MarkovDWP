@@ -12,7 +12,6 @@ setup(
         'markovdwp.priors.dwp',
         'markovdwp.source',
         'markovdwp.source.cifar',
-        'markovdwp.source.cifar.models',
         'markovdwp.source.mnist',
         'markovdwp.source.mnist.models',
         'markovdwp.source.notmnist',
