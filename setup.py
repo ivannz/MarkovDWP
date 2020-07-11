@@ -10,6 +10,7 @@ setup(
         'markovdwp.nn',
         'markovdwp.priors',
         'markovdwp.priors.dwp',
+        'markovdwp.priors.utils',
         'markovdwp.source',
         'markovdwp.source.kernel',
         'markovdwp.source.datasets',
