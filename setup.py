@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='MarkovDWP',
-    version='0.4',
+    version='0.5',
     description='''Backend for experiments with Deep Weight Prior''',
     license='MIT License',
     packages=[
@@ -11,11 +11,8 @@ setup(
         'markovdwp.priors',
         'markovdwp.priors.dwp',
         'markovdwp.source',
-        'markovdwp.source.cifar',
-        'markovdwp.source.mnist',
-        'markovdwp.source.notmnist',
-        'markovdwp.source.svhn',
-        'markovdwp.source.dataset',
+        'markovdwp.source.kernel',
+        'markovdwp.source.datasets',
         'markovdwp.source.utils',
         'markovdwp.models',
         'markovdwp.utils',

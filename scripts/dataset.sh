@@ -10,4 +10,4 @@
 # $ ./dataset.sh `root` [--tag "optional_suffix"]
 #
 
-python -m markovdwp.source.dataset $@
+python -m markovdwp.source.kernel $@
