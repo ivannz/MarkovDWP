@@ -1,5 +1,6 @@
 import torch
 from itertools import starmap
+from inspect import signature
 
 import torch.distributions as dist
 
@@ -7,7 +8,24 @@ from torch.distributions import Independent, Normal
 from cplxmodule.nn.relevance.real.base import ConvNdGaussianMixin
 
 
+def check_defaults(fn, *exceptions):
+    """Check if the each argument of the function has a default value."""
+    exceptions = set(['self', *exceptions])
+    arguments = [p for p in signature(fn).parameters.values()
+                 if p.name not in exceptions and p.kind != p.VAR_KEYWORD]
+
+    missing = [p.name for p in arguments if p.default is p.empty]
+    if missing:
+        fn_name = getattr(fn, '__qualname__', fn.__name__)
+        raise TypeError(f'`{fn_name}` has no default(s) for `{missing}`.')
+
+
 class ImplicitPrior(torch.nn.Module):
+    def __init_subclass__(cls, **kwargs):
+        # enforce defaults on explicit parameters of `.penalty` except `mod`
+        check_defaults(cls.penalty, 'mod')
+        super().__init_subclass__(**kwargs)
+
     def penalty(self, mod, *, n_draws=1, coef=1.):
         raise NotImplementedError
 
