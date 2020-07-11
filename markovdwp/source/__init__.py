@@ -2,5 +2,5 @@
 Backend for training convolutional models to get samples of the
 source kernel distribution.
 """
-from .dataset import KernelDataset
-from .dataset import MutliTaskKernelDataset
+from .kernel import KernelDataset
+from .kernel import MutliTaskKernelDataset
