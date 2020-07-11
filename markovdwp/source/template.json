@@ -34,7 +34,7 @@
         "resume_from_checkpoint": null
     },
     "model": {
-        "cls": "<class 'markovdwp.source.cifar.models.vanilla.CIFARNet'>",
+        "cls": "<class 'markovdwp.models.cifar.SourceCIFARNet'>",
         "k": 1.0,
         "n_classes": 100
     },
