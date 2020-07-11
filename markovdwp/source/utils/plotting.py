@@ -63,31 +63,35 @@ def plot(images, ax=None, f_aspect=1., **kwargs):
     # annotate
     for y in range(n_row):
         ax.text(-0.02, (2 * y + 0.75) / (2 * n_row), f'{n_row - y:2d}',
-                rotation='horizontal', horizontalalignment='left',
-                transform=ax.transAxes, fontsize='x-small')
+                rotation='horizontal', fontsize='x-small',
+                horizontalalignment='left', verticalalignment='baseline',
+                transform=ax.transAxes)
         ax.text(1.02, (2 * y + 0.75) / (2 * n_row), f'{n_row - y:2d}',
-                rotation='horizontal', horizontalalignment='right',
-                transform=ax.transAxes, fontsize='x-small')
+                rotation='horizontal', fontsize='x-small',
+                horizontalalignment='right', verticalalignment='baseline',
+                transform=ax.transAxes)
 
     for x in range(n_col):
         ax.text((2 * x + 0.75) / (2 * n_col), 1.01, f'{x+1:2d}',
-                rotation='horizontal', horizontalalignment='center', verticalalignment='bottom',
-                transform=ax.transAxes, fontsize='x-small')
+                rotation='horizontal', fontsize='x-small',
+                horizontalalignment='center', verticalalignment='bottom',
+                transform=ax.transAxes)
         ax.text((2 * x + 0.75) / (2 * n_col), -.01, f'{x+1:2d}',
-                rotation='horizontal', horizontalalignment='center', verticalalignment='top',
-                transform=ax.transAxes, fontsize='x-small')
+                rotation='horizontal', fontsize='x-small',
+                horizontalalignment='center', verticalalignment='top',
+                transform=ax.transAxes)
 
     return ax
 
 
-def plot_slices(slices, cmap=plt.cm.coolwarm):
+def plot_slices(slices, f_aspect=16/9, **kwargs):
     assert isinstance(slices, torch.Tensor) and slices.dim() == 3
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 8), dpi=120,
                            subplot_kw=dict(xticks=[], yticks=[]))
 
     images = slices.cpu().numpy()[..., np.newaxis]
-    plot(images, ax=ax, f_aspect=16 / 9, cmap=cmap)
+    plot(images, ax=ax, f_aspect=f_aspect, **kwargs)
     fig.tight_layout()
 
     plt.close()
