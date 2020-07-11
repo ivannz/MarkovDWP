@@ -180,7 +180,19 @@ class ImplicitSlicePrior(ImplicitPrior):
         return torch.stack(values, dim=0)
 
     @torch.no_grad()
-    def sample(self, shape):
+    def sample(self, weight_shape):
         # shape is c_out x c_in x [*spatial]
-        # at least [spatial] must coincide with the output dim of p(w|h)
-        raise NotImplementedError
+        #  [*spatial] must coincide with the output dim of p(w|h)
+
+        self.encoder.eval()
+        self.decoder.eval()
+
+        c_out, c_in, *spatial = weight_shape
+        # pass `zeros` through the encoder to determine the hidden dim
+        r = self.encoder(self.nilone[0].expand(1, 1, *spatial))
+
+        pi = Independent(Normal(*self.nilone).expand(r.event_shape),
+                         len(r.event_shape))
+
+        h = pi.sample((c_out, c_in)).reshape(-1, *pi.event_shape)
+        return self.decoder(h).sample().reshape(weight_shape)
