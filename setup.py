@@ -26,6 +26,7 @@ setup(
     install_requires=[
         'torch>=1.5',
         'torchvision',
+        'cplxmodule',
         'pytorch-lightning',
         'sklearn',
     ]
