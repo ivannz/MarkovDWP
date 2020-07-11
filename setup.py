@@ -13,7 +13,6 @@ setup(
         'markovdwp.source',
         'markovdwp.source.cifar',
         'markovdwp.source.mnist',
-        'markovdwp.source.mnist.models',
         'markovdwp.source.notmnist',
         'markovdwp.source.svhn',
         'markovdwp.source.dataset',
