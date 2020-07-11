@@ -1,59 +1,33 @@
 import torch
 
-from inspect import signature
+from cplxmodule.nn.relevance.base import BaseARD
 
 
-def check_defaults(fn):
-    """Check if the each argument of the function has a default value."""
-    arguments = [p for p in signature(fn).parameters.values()
-                 if p.name != 'self' and p.kind != p.VAR_KEYWORD]
-
-    missing = [p.name for p in arguments if p.default is p.empty]
-    if missing:
-        fn_name = getattr(fn, '__qualname__', fn.__name__)
-        raise TypeError(f'`{fn_name}`: no default(s) for `{missing}`.')
-
-
-class PenalizedWeight(torch.nn.Module):
-    def __init_subclass__(cls, **kwargs):
-        # enforce defaults on explicit parameters of `.penalty`
-        check_defaults(cls.penalty)
-        super().__init_subclass__(**kwargs)
-
-    def penalty(self):
-        raise NotImplementedError()
-
-
-class FreezableWeight(torch.nn.Module):
+class FreezableWeightBase(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.unfreeze()
 
+    def freeze(self):
+        """Sample from the weight distribution and disable parameter grads."""
+        with torch.no_grad():
+            sample = torch.normal(self.weight, torch.exp(self.log_sigma2 / 2))
+        self.register_buffer('weight_frozen', sample)
+        self.requires_grad_(False)
+
     def unfreeze(self):
-        self.register_buffer('frozen_weight', None)
+        """Release the weights and enable parameter grads."""
+        self.register_buffer('weight_frozen', None)
+        self.requires_grad_(True)
 
     def is_frozen(self):
         """Check if a frozen weight is available."""
-        return isinstance(self.frozen_weight, torch.Tensor)
-
-    def freeze(self):
-        """Sample from the distribution and freeze."""
-        raise NotImplementedError()
-
-
-def named_penalties(module, hyperparameters=None, prefix=''):
-    if hyperparameters is None:
-        hyperparameters = {}
-
-    for name, mod in module.named_modules(prefix=prefix):
-        if isinstance(mod, PenalizedWeight):
-            par = hyperparameters.get(name, {})
-            yield name, mod.penalty(**par)
+        return isinstance(getattr(self, 'weight_frozen', None), torch.Tensor)
 
 
 def freeze(module):
     for mod in module.modules():
-        if isinstance(mod, FreezableWeight):
+        if isinstance(mod, FreezableWeightBase):
             mod.freeze()
 
     return module  # return self
@@ -61,7 +35,53 @@ def freeze(module):
 
 def unfreeze(module):
     for mod in module.modules():
-        if isinstance(mod, FreezableWeight):
+        if isinstance(mod, FreezableWeightBase):
             mod.unfreeze()
 
     return module  # return self
+
+
+def named_penalties(module, reduction='sum', prefix='', penalties={}):
+    """Returns an iterator over all penalties in the module, yielding
+    both the name of a variational submodule as well as the value of its
+    penalty.
+
+    Parameters
+    ----------
+    penalties : dict
+        Dictionary of callables with signature `fn(module)`, keyed by the name
+        of the submodule, which it should be appled to.
+
+    Details
+    -------
+    If a module's name is present in `penalties` dict, then  use the provided
+    penalty override instead of the built-in, guaranteed by subclassing
+    `BaseARD`.
+
+    See Also
+    --------
+    `named_penalties()` in `cplxmodule.nn.relevance`.
+    """
+
+    if reduction is not None and reduction not in ('mean', 'sum'):
+        raise ValueError(f'`reduction` must be either `None`,'
+                         f' `sum` or `mean`. Got {reduction}.')
+
+    # yields own penalty and penalties of all descendants
+    for name, mod in module.named_modules(prefix=prefix):
+        # call the penalty override, otherwise use built-in penalty
+        penalty = None
+        if name in penalties:
+            penalty = penalties[name](mod)
+
+        elif isinstance(mod, BaseARD):
+            penalty = mod.penalty
+
+        if penalty is not None:
+            if reduction == 'sum':
+                penalty = penalty.sum()
+
+            elif reduction == 'mean':
+                penalty = penalty.mean()
+
+            yield name, penalty
