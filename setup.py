@@ -19,6 +19,7 @@ setup(
         'markovdwp.source.svhn',
         'markovdwp.source.dataset',
         'markovdwp.source.utils',
+        'markovdwp.models',
         'markovdwp.utils',
         'markovdwp.utils.vendor',
         'markovdwp.utils.vendor.pytorch_lightning',
