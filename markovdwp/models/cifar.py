@@ -43,7 +43,7 @@ class SourceCIFARNet:
     def __new__(cls, n_classes=10, k=1.):
         # input 3 and output 512 fixed
         *recipe, = map(int, [3, 128 * k, 256 * k, 256 * k, 512])
-        features = CIFARNetFeatures(*recipe, conv2d=cls.Conv2d, bias=False)
+        features = CIFARNetFeatures(*recipe, conv2d=cls.Conv2d, bias=True)
 
         classifier = [
             ('fc1', cls.Linear(512, 512, bias=True)),
