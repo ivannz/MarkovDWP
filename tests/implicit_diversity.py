@@ -25,7 +25,8 @@ def unpack(state):
     return module
 
 
-def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True, **kwargs):
+def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
+         verbose=False, **kwargs):
     assert kind in ('implicit', 'classic')
 
     # use zero-th device by default
@@ -59,7 +60,7 @@ def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True, **kwargs):
         }
 
     # train loop
-    for i in tqdm.trange(max_epochs):
+    for i in tqdm.trange(max_epochs, disable=not verbose):
         optim.zero_grad()
 
         # dummy task
