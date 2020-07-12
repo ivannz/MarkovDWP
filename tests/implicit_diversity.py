@@ -26,7 +26,7 @@ def unpack(state):
 
 
 def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
-         verbose=False, **kwargs):
+         verbose=False, use_sched=True, **kwargs):
     assert kind in ('implicit', 'classic')
 
     # use zero-th device by default
@@ -48,9 +48,10 @@ def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
     conv = Conv2dVD(3, 32, 7).to(device_)
 
     # Adam with linear lr schedule
-    optim = torch.optim.Adam(conv.parameters(), lr=1e-3)
-    sched = torch.optim.lr_scheduler.LambdaLR(
-        optim, partial(linear, t0=0, t1=max_epochs))
+    optim, sched = torch.optim.Adam(conv.parameters(), lr=1e-3), None
+    if use_sched:
+        sched = torch.optim.lr_scheduler.LambdaLR(
+            optim, partial(linear, t0=0, t1=max_epochs))
 
     # pre-create penalties
     penalties = {}
@@ -72,12 +73,13 @@ def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
 
         # backprop
         value.backward()
-        optim.step()
 
-        sched.step()
+        optim.step()
+        if sched is not None:
+            sched.step()
 
         # report
-        if (i % 5) == 0:
+        if (i % 5) == 0 or (i+1 == max_epochs):
             wandb.log({
                 'slices': plot_slices(
                     conv.weight.detach().cpu().flatten(0, 1),
@@ -99,7 +101,8 @@ wandb.config.setdefaults({
     'kind': 'implicit',
     'n_draws': 25,
     'max_epochs': 250,
-    'collapsed': True
+    'collapsed': True,
+    'use_sched': True
 })
 
 main(**wandb.config)

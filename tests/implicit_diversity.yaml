@@ -8,8 +8,10 @@ parameters:
   n_draws:
     values: [1, 10, 30]
   max_epochs:
-    value: 300
+    value: 250
   collapsed:
+    values: [yes, no]
+  use_sched:
     values: [yes, no]
   order:
     values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
