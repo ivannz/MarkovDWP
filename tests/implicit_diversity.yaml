@@ -1,0 +1,15 @@
+project: 'Implicit Prior Diversity'
+description: 'This is a test sweep to check the diversity of the learnt Implicit Prior'
+program: implicit_diversity.py
+method: grid
+parameters:
+  kind:
+    values: ['implicit', 'classic']
+  n_draws:
+    values: [1, 10, 30]
+  max_epochs:
+    value: 300
+  collapsed:
+    values: [yes, no]
+  order:
+    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

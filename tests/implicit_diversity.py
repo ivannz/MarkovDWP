@@ -26,6 +26,8 @@ def unpack(state):
 
 
 def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True, **kwargs):
+    assert kind in ('implicit', 'classic')
+
     # use zero-th device by default
     device_ = torch.device('cuda:0')
 
