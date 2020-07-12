@@ -118,8 +118,9 @@ def override(dictionary, **overrides):
         else:
             local[key] = value
 
-    out = {k: local.get(k, v) for k, v in dictionary.items()}
+    # override the non-nested items and possible introduce new ones
+    out = {**dictionary, **local}
     for key, sub_params in nested.items():
-        out[key] = override(dictionary[key], **sub_params)
+        out[key] = override(dictionary.get(key, {}), **sub_params)
 
     return out
