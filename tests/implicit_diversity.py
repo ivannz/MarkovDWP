@@ -25,7 +25,7 @@ def unpack(state):
     return module
 
 
-def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True):
+def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True, **kwargs):
     # use zero-th device by default
     device_ = torch.device('cuda:0')
 
