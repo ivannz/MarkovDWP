@@ -184,15 +184,19 @@ class ImplicitSlicePrior(ImplicitPrior):
         # shape is c_out x c_in x [*spatial]
         #  [*spatial] must coincide with the output dim of p(w|h)
 
-        self.encoder.eval()
         self.decoder.eval()
-
         c_out, c_in, *spatial = weight_shape
-        # pass `zeros` through the encoder to determine the hidden dim
-        r = self.encoder(self.nilone[0].expand(1, 1, *spatial))
+        if isinstance(self.encoder, torch.nn.Module):
+            self.encoder.eval()
 
-        pi = Independent(Normal(*self.nilone).expand(r.event_shape),
-                         len(r.event_shape))
+            # pass `zeros` through the encoder to determine the hidden dim
+            r = self.encoder(self.nilone[0].expand(1, 1, *spatial))
+            pi = Independent(Normal(*self.nilone).expand(r.event_shape),
+                             len(r.event_shape))
+
+        elif isinstance(self.encoder, (tuple, list)):
+            pi = Independent(Normal(*self.nilone).expand(self.encoder),
+                             len(self.encoder))
 
         h = pi.sample((c_out, c_in)).reshape(-1, *pi.event_shape)
         return self.decoder(h).sample().reshape(weight_shape)
