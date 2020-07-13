@@ -118,7 +118,7 @@ class ImplicitSlicePrior(ImplicitPrior):
         # zero and one for the std Gaussian prior
         self.register_buffer('nilone', torch.tensor([0., 1.]))
 
-    def penalty_q(self, q, n_draws=1):
+    def penalty_q(self, q, n_draws_q=1, n_draws_r=1):
         """Penalty for a factorized `q`. `pi` is Std Gaussian.
 
         Parameters
@@ -135,7 +135,7 @@ class ImplicitSlicePrior(ImplicitPrior):
         collapsed to `pi(h)`, which is batch-factorized and uses it instead.
         """
         # independently draw a batch of slices ~ `q`
-        w = q.rsample([n_draws]).reshape(-1, *q.event_shape)
+        w = q.rsample([n_draws_q]).reshape(-1, *q.event_shape)
         #  e.g. samples `c_out x c_in` slices of shape `1 x 7 x 7`
 
         pi = Normal(*self.nilone)
@@ -154,25 +154,33 @@ class ImplicitSlicePrior(ImplicitPrior):
 
             kl_r_pi = torch.zeros(r.batch_shape).to(self.nilone)
 
-        # assign correct shape to KL
+        # assign correct shape to KL: n_draws_q x [*q.batch_shape]
         kl = kl_r_pi.reshape(-1, *q.batch_shape)
 
-        # `one` hidden sample per each slice
-        p = self.decoder(r.rsample([1]).reshape(-1, *r.event_shape))
-        log_p = p.log_prob(w).reshape(-1, *q.batch_shape)
+        # using r.sample([n_draws_r]) would require repeating w along axis=0
+        log_p = []
+        for _ in range(n_draws_r):
+            # `one` hidden sample per each slice
+            p = self.decoder(r.rsample([1]).reshape(-1, *r.event_shape))
+
+            # w is [n_draws_q x *q.batch_shape] x [*q.event_shape]
+            log_p.append(p.log_prob(w).reshape(-1, *q.batch_shape))
+
+        # log_p is n_draws_r x n_draws_q x [*q.batch_shape]
+        log_p = torch.stack(log_p, dim=0)
 
         # -ent + kl - log_p
-        return -q.entropy() + kl.mean(dim=0) - log_p.mean(dim=0)
+        return -q.entropy() + kl.mean(dim=0) - log_p.mean(dim=(0, 1))
 
-    def penalty(self, mod, *, n_draws=1, coef=1.):
-        # as a last resort, cut w into pieces and loop over them (can do due to
-        #  independence) then compute the penalty sum and then immediately backprop.
-        # * seems to be compatible with pl logic
+    def penalty(self, mod, *, n_draws_q=1, coef=1., n_draws_r=1):
+        # as a last resort, cut `w` into pieces and loop over them (can do due
+        #  to independence) then compute the penalty sum and then immediately
+        #  backprop. Seems to be compatible with pl logic.
 
         values = []
         # accumulates grads
         for q in to_q(mod, 1):
-            value = self.penalty_q(q, n_draws)
+            value = self.penalty_q(q, n_draws_q, n_draws_r)
 
             (value.sum() * coef).backward()
             values.append(value.detach())
