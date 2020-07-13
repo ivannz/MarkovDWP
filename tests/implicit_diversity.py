@@ -25,9 +25,12 @@ def unpack(state):
     return module
 
 
-def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
-         verbose=False, use_sched=True, **kwargs):
-    assert kind in ('implicit', 'classic')
+def main(elbo_kind='implicit', encoder_kind='collapsed',
+         max_epochs=250, use_sched=True, n_draws_q=1, n_draws_r=1,
+         verbose=False, **kwargs):
+    assert elbo_kind in ('implicit', 'classic')
+
+    assert encoder_kind in ('collapsed', 'fixed', 'trainable')
 
     # use zero-th device by default
     device_ = torch.device('cuda:0')
@@ -38,14 +41,19 @@ def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
         snapshot = torch.load(fin, map_location=torch.device('cpu'))
 
     decoder = unpack(snapshot['decoder']).requires_grad_(False)
-    encoder = unpack(snapshot['encoder']).requires_grad_(False)
-    if collapsed:
-        encoder = encoder.z_dim, 1, 1
+    encoder = unpack(snapshot['encoder'])
 
-    ip7x7 = ImplicitSlicePrior(decoder, encoder).to(device_)
+    encoder.requires_grad_(encoder_kind == 'trainable')
+    if encoder_kind == 'collapsed':
+        encoder = encoder.event_shape
 
     # create a simple conv layer
-    conv = Conv2dVD(3, 32, 7).to(device_)
+    conv = Conv2dVD(3, 32, 7)
+
+    # attach the implict prior to it, so that we can keep them together
+    ip7x7 = conv.ip7x7 = ImplicitSlicePrior(decoder, encoder)
+
+    conv.to(device_)
 
     # Adam with linear lr schedule
     optim, sched = torch.optim.Adam(conv.parameters(), lr=1e-3), None
@@ -55,9 +63,10 @@ def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
 
     # pre-create penalties
     penalties = {}
-    if kind == 'implicit':
+    if elbo_kind == 'implicit':
         penalties = {
-            'kl_div': partial(ip7x7.penalty, n_draws=n_draws, coef=1.)
+            'kl_div': partial(ip7x7.penalty, n_draws_q=n_draws_q,
+                              n_draws_r=n_draws_r, coef=1.)
         }
 
     # train loop
@@ -98,11 +107,12 @@ def main(kind='implicit', n_draws=1, max_epochs=250, collapsed=True,
 
 wandb.init(project='Implicit Prior Diversity')
 wandb.config.setdefaults({
-    'kind': 'implicit',
-    'n_draws': 25,
+    'elbo_kind': 'implicit',
+    'encoder_kind': 'collapsed',
     'max_epochs': 250,
-    'collapsed': True,
-    'use_sched': True
+    'use_sched': True,
+    'n_draws_q': 1,
+    'n_draws_r': 1,
 })
 
 main(**wandb.config)

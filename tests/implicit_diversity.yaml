@@ -3,14 +3,16 @@ description: 'This is a test sweep to check the diversity of the learnt Implicit
 program: implicit_diversity.py
 method: grid
 parameters:
-  kind:
+  elbo_kind:
     values: ['implicit', 'classic']
-  n_draws:
+  n_draws_q:
+    values: [1, 10, 30]
+  n_draws_r:
     values: [1, 10, 30]
   max_epochs:
     value: 250
-  collapsed:
-    values: [yes, no]
+  encoder_kind:
+    values: ['collapsed', 'fixed', 'trainable']
   use_sched:
     values: [yes, no]
   order:
