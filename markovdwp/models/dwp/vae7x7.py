@@ -32,7 +32,12 @@ class Encoder(Module):
             Conv2d(2 * h_dim, 2 * z_dim, 1)
         )
 
+        self.kernel_size = 7, 7
+        self.event_shape = z_dim, 1, 1
+
     def forward(self, input):
+        assert input.shape[2:] == self.kernel_size
+
         loc, logscale = torch.chunk(self.features(input), 2, dim=1)
         return Independent(Normal(loc, F.softplus(logscale)), 3)
 
@@ -68,6 +73,11 @@ class Decoder(Module):
                 1 * h_dim, 2 * x_dim, 1)  # NO conv^\top here
         )
 
+        self.kernel_size = 1, 1
+        self.event_shape = x_dim, 7, 7
+
     def forward(self, input):
+        assert input.shape[2:] == self.kernel_size
+
         loc, logscale = torch.chunk(self.features(input), 2, dim=1)
         return Independent(Normal(loc, F.softplus(logscale)), 3)
