@@ -12,13 +12,34 @@ import torch  # has its own PRNGs, but torchvision also uses `random`
 import numpy as np  # preemptively import to seed it's default PRNG
 
 import pytorch_lightning as pl
+
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
-from ..runtime.source import ClassificationRuntime
 from ..utils.runtime import get_instance, get_class
 from ..utils.runtime import get_dataloaders, get_datasets
+
+from ..runtime.source import BaseClassificationRuntime, named_l2_norm_penalties
+
+from functools import partial
+from ..runtime.utils.common import linear
+
+
+class ClassificationRuntime(BaseClassificationRuntime):
+    def configure_optimizers(self):
+        optim = torch.optim.Adam(self.parameters(), lr=self.lr)
+
+        sched = torch.optim.lr_scheduler.LambdaLR(
+            optim, partial(linear, t0=0, t1=self.trainer.max_epochs))
+
+        return [optim], [{'scheduler': sched, 'monitor': 'loss'}]
+
+    def training_penalty(self, outputs, prefix=''):
+        subprefix = prefix + ('.' if prefix else '')
+
+        return dict(named_l2_norm_penalties(self.core, reduction='sum',
+                                            prefix=f'{subprefix}l2_norm'))
 
 
 def get_trainer(*, gpus, logger, max_epochs=0, **kwargs):

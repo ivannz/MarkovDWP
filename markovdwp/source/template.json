@@ -42,7 +42,8 @@
         "lr": 1e-3,
         "coef": {
             "task.nll": 1.0,
-            "model": 1e-4
+            "model.l2_norm.features": 1e-4,
+            "model.l2_norm.classifier": 0.0,
         }
     }
 }
