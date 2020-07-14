@@ -70,7 +70,13 @@ def to_q(mod, dim=0):
                                   mod.log_sigma2.flatten(0, 1)))
 
     elif dim == 1:
-        yield from starmap(q, zip(mod.weight, mod.log_sigma2))
+        c_out, c_in, *dontcare = mod.weight.shape
+        if c_out <= c_in:
+            yield from starmap(q, zip(mod.weight, mod.log_sigma2))
+
+        else:
+            for i in range(c_in):
+                yield q(mod.weight[:, i], mod.log_sigma2[:, i])
 
     else:
         yield q(mod.weight, mod.log_sigma2)
