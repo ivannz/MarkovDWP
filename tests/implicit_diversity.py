@@ -6,7 +6,7 @@ import torch
 
 import matplotlib.pyplot as plt
 
-from funvtools import partial
+from functools import partial
 
 from markovdwp.priors import ImplicitSlicePrior
 from markovdwp.priors.implicit import to_q
