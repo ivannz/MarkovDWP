@@ -1,6 +1,8 @@
 import re
 import importlib
 
+from torch.utils.data import DataLoader
+
 
 def get_class(name):
     """Parse the specified type-string, import it and return the type."""
@@ -30,3 +32,17 @@ def get_qualname(cls):
     x = get_class(cls)
     m, n = x.__module__, x.__name__
     return m + ('.' if m else '') + n
+
+
+def get_datasets(datasets):
+    return {
+        name: get_instance(**klass)
+        for name, klass in datasets.items()
+    }
+
+
+def get_dataloaders(datasets, feeds):
+    return {
+        feed: DataLoader(datasets[feed], **settings)
+        for feed, settings in feeds.items()
+    }

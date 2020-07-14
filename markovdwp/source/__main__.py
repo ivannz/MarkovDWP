@@ -16,23 +16,8 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
-from torch.utils.data import DataLoader
 from .base import ClassificationRuntime
 from ..utils.runtime import get_instance, get_class
-
-
-def get_datasets(datasets):
-    return {
-        name: get_instance(**klass)
-        for name, klass in datasets.items()
-    }
-
-
-def get_dataloaders(datasets, feeds):
-    return {
-        feed: DataLoader(datasets[feed], **settings)
-        for feed, settings in feeds.items()
-    }
 
 
 def get_trainer(*, gpus, logger, max_epochs=0, **kwargs):
