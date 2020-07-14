@@ -12,7 +12,6 @@ setup(
         'markovdwp.source',
         'markovdwp.source.kernel',
         'markovdwp.source.datasets',
-        'markovdwp.source.utils',
         'markovdwp.models',
         'markovdwp.models.dwp',
         'markovdwp.runtime',
