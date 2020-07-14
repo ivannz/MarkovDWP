@@ -10,7 +10,7 @@ import argparse
 from torch.nn import Conv2d
 from torch.nn.modules.conv import _ConvNd
 
-from ..utils.runtime import get_instance
+from ...utils.runtime import get_instance
 from ...utils.io import load, write_file
 
 

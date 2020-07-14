@@ -18,7 +18,7 @@ from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
 from torch.utils.data import DataLoader
 from .base import ClassificationRuntime
-from .utils.runtime import get_instance, get_class
+from ..utils.runtime import get_instance, get_class
 
 
 def get_datasets(datasets):
