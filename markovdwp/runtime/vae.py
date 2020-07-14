@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 from torch.distributions.kl import _batch_mahalanobis
 
 from functools import partial
-from ..source.utils.common import linear
+from .utils.common import linear
 
 from ..utils.vendor.pytorch_lightning import GradInformation
 
