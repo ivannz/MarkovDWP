@@ -4,14 +4,9 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 
 from functools import partial
-from .utils.common import weighted_sum, prepare_log, collate
+from .utils.common import weighted_sum, prepare_log, collate, linear
 
 from ..utils.vendor.pytorch_lightning import GradInformation
-
-
-def linear(t, t0=0, t1=100, v0=1., v1=0.):
-    tau = min(1., max(0., (t1 - t) / (t1 - t0)))
-    return v0 * tau + v1 * (1 - tau)
 
 
 class ClassificationRuntime(GradInformation, pl.LightningModule):

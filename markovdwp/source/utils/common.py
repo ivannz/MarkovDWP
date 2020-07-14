@@ -21,3 +21,8 @@ def collate(records):
         for k, v in record.items():
             out.setdefault(k, []).append(v)
     return out
+
+
+def linear(t, t0=0, t1=100, v0=1., v1=0.):
+    tau = min(1., max(0., (t1 - t) / (t1 - t0)))
+    return v0 * tau + v1 * (1 - tau)
