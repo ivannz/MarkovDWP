@@ -154,7 +154,7 @@ def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
 
     # train the model
     model = train(gpus, config, WandbLogger(
-        tags=[*generate_tags(config)]
+        tags=[*generate_tags(config)], config=config
     ))
 
     # store the model next to the manifest
