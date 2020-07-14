@@ -20,7 +20,7 @@ from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 from ..utils.runtime import get_instance, get_class
 from ..utils.runtime import get_dataloaders, get_datasets
 
-from ..runtime.source import BaseClassificationRuntime, named_l2_norm_penalties
+from ..runtime.base import BaseClassificationRuntime, named_l2_norm_penalties
 
 from functools import partial
 from ..runtime.utils.common import linear
