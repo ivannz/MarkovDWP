@@ -18,6 +18,7 @@ from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
 from ..runtime.source import ClassificationRuntime
 from ..utils.runtime import get_instance, get_class
+from ..utils.runtime import get_dataloaders, get_datasets
 
 
 def get_trainer(*, gpus, logger, max_epochs=0, **kwargs):
