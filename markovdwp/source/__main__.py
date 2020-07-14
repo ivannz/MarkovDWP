@@ -174,10 +174,12 @@ def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
     elif os.path.exists(target):
         raise ValueError(f'`{target}` already exists! Refusing to proceed.')
 
+    # pl's Wandb logger uses reinit=true! so update config here
+    logger = WandbLogger(tags=[*generate_tags(config)])
+    logger.experiment.config.update(config)
+
     # train the model
-    model = train(gpus, config, WandbLogger(
-        tags=[*generate_tags(config)], config=config
-    ))
+    model = train(gpus, config, logger)
 
     # store the model next to the manifest
     with gzip.open(target, 'wb', compresslevel=9) as fout:
