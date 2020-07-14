@@ -16,6 +16,7 @@ setup(
         'markovdwp.source.utils',
         'markovdwp.models',
         'markovdwp.models.dwp',
+        'markovdwp.runtime',
         'markovdwp.utils',
         'markovdwp.utils.vendor',
         'markovdwp.utils.vendor.pytorch_lightning',

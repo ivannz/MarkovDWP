@@ -16,7 +16,7 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
-from .base import ClassificationRuntime
+from ..runtime.source import ClassificationRuntime
 from ..utils.runtime import get_instance, get_class
 
 
