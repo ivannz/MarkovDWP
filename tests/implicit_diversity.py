@@ -6,12 +6,13 @@ import torch
 
 import matplotlib.pyplot as plt
 
+from funvtools import partial
+
 from markovdwp.priors import ImplicitSlicePrior
 from markovdwp.priors.implicit import to_q
 
 from markovdwp.source.utils.plotting import plot_slices
-from markovdwp.source.utils.common import weighted_sum
-from markovdwp.source.base import linear, partial
+from markovdwp.source.utils.common import weighted_sum, linear
 
 from markovdwp.utils.runtime import get_instance
 
