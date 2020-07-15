@@ -110,9 +110,12 @@ def train(gpus, config, logger=None):
     return pl_module.core.cpu().eval()
 
 
-def main(manifest, target=None, gpus=[0], debug=False,
+def main(manifest, target=None, gpus=[0], debug=False, tags=None,
          priors='fixed', init='default'):
     breakpoint() if debug else None
+
+    assert tags is None or isinstance(tags, str)
+    tags = tags.split(',') if tags is not None else []
 
     # the manifest must be complete and ready to go
     parameters = json.load(open(manifest, 'rt'))
@@ -139,8 +142,12 @@ def main(manifest, target=None, gpus=[0], debug=False,
         pass
 
     elif os.path.isdir(target):
+        # consume the first tag
+        tag, *tags = tags if tags else [None]
+
         # save under a random name if target is a directory
-        fid, target = tempfile.mkstemp(dir=target, suffix='.gz')
+        fid, target = tempfile.mkstemp(dir=target, suffix='.gz',
+                                       prefix=tag + ('__' if tag else ''))
         os.close(fid)
 
     elif os.path.exists(target):
@@ -148,7 +155,7 @@ def main(manifest, target=None, gpus=[0], debug=False,
 
     # pl's Wandb logger uses reinit=true!
     # wandb.init(project='DWP Slice Replication Machine', reinit=False)
-    logger = WandbLogger(project='DWP Slice Replication Machine')
+    logger = WandbLogger(project='DWP Slice Replication Machine', tags=tags)
 
     # sync with wandb's agent's arguments and rebuild the config
     logger.experiment.config.setdefaults(flatten(parameters, delim='__'))
@@ -193,6 +200,12 @@ if __name__ == '__main__':
         help='Device ids to occupy by the experiment.')
 
     parser.add_argument(
+        '--tags', type=str, required=False,
+        help='Optional comma-separated tags for the experiment being run. '
+             'If `target` is a directory, then the first tag is used as a '
+             'prefix to in model names.')
+
+    parser.add_argument(
         '--debug', required=False, dest='debug', action='store_true',
         help='Enter trace mode.')
 
@@ -208,7 +221,7 @@ if __name__ == '__main__':
 
     parser.set_defaults(
         target=None, gpus=[0], init='default',
-        priors='fixed', debug=False)
+        priors='fixed', tags=None, debug=False)
 
     args, _ = parser.parse_known_args()
     main(**vars(args))
