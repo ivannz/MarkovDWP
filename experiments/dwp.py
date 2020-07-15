@@ -78,8 +78,6 @@ def train(gpus, config, logger=None):
     if kl_div == 'dataset':
         coef['model.kl_div'] = 1. / len(datasets['train'])
 
-    logger.experiment.config.update(flatten(config, delim='__'))
-
     # proceed
     pl_module = Runtime(
         get_instance(**config['model']), **config['options'])
@@ -88,8 +86,15 @@ def train(gpus, config, logger=None):
                              **config['trainer'])
 
     feeds = get_dataloaders(datasets, config['feeds'])
+
+    # last-minute update of the config before training
+    logger.experiment.config.update(
+        flatten(config, delim='__'),
+        allow_val_change=True)
+
     try:
         logger.watch(pl_module)
+
         pl_trainer.fit(pl_module,
                        train_dataloader=feeds.get('train'),
                        val_dataloaders=feeds.get('test'))
