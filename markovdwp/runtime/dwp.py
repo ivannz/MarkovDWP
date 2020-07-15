@@ -117,6 +117,23 @@ def init(module, priors, specs, prefix=''):
 
 
 class BaseDWPRuntime(BaseRuntime):
+    r"""ELBO for Bayesian NN with var. approx. `q`.
+
+    $$
+    \mathcal{L}_{classic}
+        = \mathbb{E}_{w \sim q} \log p(D \mid w)
+            - \mathbb{E}_{w \sim q} \log \frac{q(w)}{\pi(w)}
+        \,, $$
+
+    If $\pi(w) = \mathbb{E}_{h \sim \pi} p(w \mid h)$, i.e. an implicit prior,
+    then for any $r(h\mid w)$ it computes the secondary lower bound:
+    $$
+    \mathcal{L}_{implicit}
+        = \mathbb{E}_{w \sim q} \log p(D \mid w)
+            - \mathbb{E}_{w \sim q} \mathbb{E}_{h \sim r(h|w)}
+                \log \frac{q(w) r(h \mid w)}{p(w \mid h) \pi(h)}
+        \,, $$
+    """
     def __init__(self, core, *, coef, lr, kind, priors, init):
         assert kind in ('classic', 'implicit')
         super().__init__(core, coef=coef, lr=lr)
