@@ -130,3 +130,34 @@ def override(dictionary, **overrides):
         out[key] = override(dictionary.get(key, {}), **sub_params)
 
     return out
+
+
+def resolve(lookup):
+    """Resolve references in the lookup table.
+
+    Details
+    -------
+    Simplified DFS for directed tree-like graphs to handle possible cycles.
+    """
+    # dfs though the lookup table
+    memo, resolved = set(), {}
+    for root in lookup:
+        if root in resolved:
+            continue
+
+        path = [root]
+        while root not in memo:
+            memo.add(root)
+
+            root = lookup[root]
+            if root not in lookup:
+                # we fall off the lookup path
+                break
+            path.append(root)
+
+        if root in path:
+            raise ValueError(f'Lookup contains cyclic reference `{path}`.')
+
+        resolved.update(dict.fromkeys(path, root))
+
+    return resolved
