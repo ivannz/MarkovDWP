@@ -110,17 +110,17 @@ def main(manifest, target=None, gpus=[0], debug=False,
     breakpoint() if debug else None
 
     # the manifest must be complete and ready to go
-    config = json.load(open(manifest, 'rt'))
+    parameters = json.load(open(manifest, 'rt'))
 
     # process priors and init fast args
     assert priors in ('collapsed', 'fixed', 'trainable')
-    config = config['options']['priors']
+    config = parameters['options']['priors']
     for name, prior in config.items():
         if isinstance(prior, dict):
             prior['kind'] = priors
 
     # try opening the kernel dataset and
-    config = config['options']['init']
+    config = parameters['options']['init']
     if init not in ('default', 'prior'):
         missing = config.keys() - KernelDataset.info(init).keys()
         if missing:
@@ -144,12 +144,10 @@ def main(manifest, target=None, gpus=[0], debug=False,
     # pl's Wandb logger uses reinit=true!
     # wandb.init(project='DWP Slice Replication Machine', reinit=False)
     logger = WandbLogger(project='DWP Slice Replication Machine')
-    logger.experiment.config.setdefaults(flatten(config))
-
-    config = override(config, **logger.experiment.config)
+    logger.experiment.config.setdefaults(flatten(parameters))
 
     # train the model
-    model = train(gpus, config, logger)
+    model = train(gpus, logger.experiment.config, logger)
 
     # store the model next to the manifest
     if target is not None:
@@ -172,7 +170,7 @@ if __name__ == '__main__':
         add_help=True)
 
     parser.add_argument(
-        'manifest', type=str,
+        '--manifest', type=str, required=True,
         help='The manifest of the experiment.')
 
     parser.add_argument(
@@ -204,4 +202,5 @@ if __name__ == '__main__':
         target=None, gpus=[0], init='default',
         priors='fixed', debug=False)
 
-    main(**vars(parser.parse_args()))
+    args, _ = parser.parse_known_args()
+    main(**vars(args))
