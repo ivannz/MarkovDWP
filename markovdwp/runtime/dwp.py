@@ -3,6 +3,7 @@ import torch
 import gzip
 
 from functools import partial
+from collections.abc import Hashable
 
 from torch.utils.data import DataLoader
 
@@ -48,10 +49,11 @@ def load_priors(**priors):
         if isinstance(prior, dict):
             loaded[name] = load_prior(**prior)
 
-        elif not isinstance(prior, str):
-            raise TypeError(f'Bad shared Prior reference `{prior}`.')
+        elif isinstance(prior, Hashable):
+            lookup[name] = prior
 
-        lookup[name] = prior
+        else:
+            raise TypeError(f'Bad shared Prior reference `{prior}`.')
 
     lookup = resolve(lookup)  # detect cyclical and resolve linear references
     missing = [ref for ref in lookup.values() if ref not in loaded]
