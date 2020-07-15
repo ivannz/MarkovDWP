@@ -78,7 +78,7 @@ def train(gpus, config, logger=None):
     if kl_div == 'dataset':
         coef['model.kl_div'] = 1. / len(datasets['train'])
 
-    logger.experiment.config.update(flatten(config))
+    logger.experiment.config.update(flatten(config, delim='__'))
 
     # proceed
     pl_module = Runtime(
@@ -144,7 +144,7 @@ def main(manifest, target=None, gpus=[0], debug=False,
     # pl's Wandb logger uses reinit=true!
     # wandb.init(project='DWP Slice Replication Machine', reinit=False)
     logger = WandbLogger(project='DWP Slice Replication Machine')
-    
+
     # sync with wandb's agent's arguments and rebuild the config
     logger.experiment.config.setdefaults(flatten(parameters, delim='__'))
     config = unflatten({**logger.experiment.config}, delim='__')
