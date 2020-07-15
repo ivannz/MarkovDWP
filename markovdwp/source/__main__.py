@@ -11,16 +11,13 @@ import tempfile  # cleverly uses a separate instance of random's PRGN
 import torch  # has its own PRNGs, but torchvision also uses `random`
 import numpy as np  # preemptively import to seed it's default PRNG
 
-import pytorch_lightning as pl
-
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 
 from ..utils.runtime import get_instance, get_class
 from ..utils.runtime import get_dataloaders, get_datasets
 
 from ..runtime.base import BaseClassificationRuntime, named_l2_norm_penalties
+from ..runtime.trainer import get_trainer
 
 from functools import partial
 from ..runtime.utils.common import linear
@@ -40,36 +37,6 @@ class ClassificationRuntime(BaseClassificationRuntime):
 
         return dict(named_l2_norm_penalties(self.core, reduction='sum',
                                             prefix=f'{subprefix}l2_norm'))
-
-
-def get_trainer(*, gpus, logger, max_epochs=0, **kwargs):
-    callbacks, checkpoint_callback = None, None
-    if isinstance(kwargs.get('resume_from_checkpoint'), str) \
-       and max_epochs < 1:
-        # disable logging for reloaded models with no training
-        logger = None
-
-    if logger is not None:
-        callbacks = [LearningRateLogger()]
-        if max_epochs >= 1:
-            # will inherit dirpath from logger
-            checkpoint_callback = ModelCheckpoint()
-
-    kwargs = {
-        'track_grad_norm': 1,
-        'val_check_interval': 1.0,
-        **kwargs,
-    }
-    return pl.Trainer(
-        gpus=gpus,
-        weights_summary=None,
-        terminate_on_nan=True,
-        logger=logger,
-        checkpoint_callback=checkpoint_callback,
-        callbacks=callbacks,
-        max_epochs=max_epochs,
-        **kwargs
-    )
 
 
 # coef=..., lr=options['lr'], max_epochs=options['lr_max_epochs']
