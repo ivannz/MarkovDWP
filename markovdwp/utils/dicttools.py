@@ -34,8 +34,8 @@ def propagate(lookup, G, prefix='', value=None, delim='.'):
 
 
 def add_prefix(dictionary, prefix='', delim='.'):
-    prefix = prefix + (delim if prefix else '')
-    return {prefix + k: v for k, v in dictionary.items()}
+    return {prefix + (delim if k else '') + k: v
+            for k, v in dictionary.items()}
 
 
 def aggregate(dictionary, level=0, delim='.'):
