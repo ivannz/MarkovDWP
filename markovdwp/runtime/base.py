@@ -20,7 +20,7 @@ def named_l2_norm_penalties(module, reduction='sum', prefix=''):
                                prefix=prefix, penalties=overrides)
 
 
-class BaseClassificationRuntime(GradInformation, pl.LightningModule):
+class BaseRuntime(GradInformation, pl.LightningModule):
     def __init__(self, core, *, coef, lr):
         super().__init__()
         self.core, self.coef, self.lr = core, coef, lr
@@ -28,6 +28,12 @@ class BaseClassificationRuntime(GradInformation, pl.LightningModule):
     def forward(self, input):
         return self.core(input)
 
+    def training_penalty(self, outputs, prefix=''):
+        # subprefix = prefix + ('.' if prefix else '')
+        raise NotImplementedError
+
+
+class BaseClassificationRuntime(BaseRuntime):
     def training_step(self, batch, batch_idx):
         X, y = batch
         return {'y': y, 'log_p': F.log_softmax(self(X), dim=-1)}
@@ -48,10 +54,6 @@ class BaseClassificationRuntime(GradInformation, pl.LightningModule):
         # 3. return loss components as floats grouping stats for brevity
         value, terms = weighted_sum({**model, **task}, **self.coef)
         return {'loss': value, 'log': prepare_log(terms)}
-
-    def training_penalty(self, outputs, prefix=''):
-        # subprefix = prefix + ('.' if prefix else '')
-        raise NotImplementedError
 
     validation_step = training_step
 
