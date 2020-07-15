@@ -2,6 +2,7 @@ from math import log
 
 import torch
 import torch.distributions as dist
+from torch.distributions import Independent, Normal
 
 import pytorch_lightning as pl
 
@@ -50,34 +51,37 @@ class VAERuntime(GradInformation, pl.LightningModule):
         self.beta, self.lr = beta, lr
         self.k = 1  # default k to one in VAE, see Kingma and Welling (2019)
 
-        self.register_buffer('nil', torch.tensor(0.))
-        self.register_buffer('one', torch.tensor(1.))
+        # zero and one for the std Gaussian prior
+        self.register_buffer('nilone', torch.tensor([0., 1.]))
 
     def forward(self, input):
         q = self.encoder(input)
         p = self.decoder(q.rsample())
 
         # kl-std normal: factorized std gaussian prior
-        pi = dist.Independent(
-            dist.Normal(self.nil, self.one).expand(q.event_shape), 3)
+        pi = Independent(
+            Normal(*self.nilone).expand(q.event_shape), len(q.event_shape))
+
         return p, pi, q
 
     def training_step(self, batch, batch_idx):
         if isinstance(batch, (list, tuple)):
             batch, *dontcare = batch  # vae: only input matters
         X = batch.unsqueeze(1)
+
         p, pi, q = self(X)
 
+        # the components are 1d with shape `batch`
         return {
             'sgvb/loglik': p.log_prob(X),
-            'sgvb/kl': dist.kl_divergence(q, pi)
+            'sgvb/kl-div': dist.kl_divergence(q, pi)
         }
 
     def training_step_end(self, outputs):
         beta = beta_scheduler(self.current_epoch, self.beta)
 
         ll = outputs['sgvb/loglik'].mean()
-        kl = outputs['sgvb/kl'].mean()
+        kl = outputs['sgvb/kl-div'].mean()
         elbo = ll - beta * kl
 
         return {'loss': -elbo,
@@ -109,34 +113,21 @@ class SGVBRuntime(VAERuntime):
             batch, *dontcare = batch  # vae: only input matters
         X = batch.unsqueeze(1)
 
+        # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
         q = self.encoder(X)
-        pi = dist.Independent(
-            dist.Normal(self.nil, self.one).expand(q.event_shape), 3)
+        pi = Independent(
+            Normal(*self.nilone).expand(q.event_shape), len(q.event_shape))
 
         # (sgvb)_k = E_x E_{S~q^k(z|x)} E_{z~S} log p(x|z) pi(z) / q(z|x)
-        ll = []
-        for k, z in enumerate(q.rsample((self.k,))):
-            ll.append(self.decoder(z).log_prob(X))
+        # log_p is `self.k x batch`
+        log_p = torch.stack([
+            self.decoder(z).log_prob(X) for z in q.rsample([self.k])
+        ], dim=0)
 
         return {
-            'sgvb/loglik': sum(ll) / self.k,
-            'sgvb/kl': dist.kl_divergence(q, pi)
+            'sgvb/loglik': log_p.mean(dim=0),
+            'sgvb/kl-div': dist.kl_divergence(q, pi)
         }
-
-    def training_step_end(self, outputs):
-        beta = beta_scheduler(self.current_epoch, self.beta)
-
-        ll = outputs['sgvb/loglik'].mean()
-        kl = outputs['sgvb/kl'].mean()
-        elbo = ll - beta * kl
-
-        return {'loss': -elbo,
-                'log': {
-                    'sgvb/elbo': elbo,
-                    'sgvb/loglik': ll,
-                    'sgvb/kl-div': kl,
-                    'sgvb/beta': beta,
-                }}
 
 
 class IWAERuntime(VAERuntime):
@@ -151,47 +142,44 @@ class IWAERuntime(VAERuntime):
             batch, *dontcare = batch  # vae: only input matters
         X = batch.unsqueeze(1)
 
+        # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
         q = self.encoder(X)
-        pi = dist.Independent(
-            dist.Normal(self.nil, self.one).expand(q.event_shape), 3)
+        pi = Independent(
+            Normal(*self.nilone).expand(q.event_shape), len(q.event_shape))
 
         # (iwae)_k = E_x E_{S~q^k(z|x)} log E_{z~S} p(x|z) pi(z) / q(z|x)
         #  * like (sgvb)_k but E_z and log are interchanged
-        ll, kl = [], []
-        for k, z in enumerate(q.rsample((self.k,))):
-            p = self.decoder(z)
-            ll.append(p.log_prob(X))
-            kl.append(pi.log_prob(z) - q.log_prob(z))
+        log_p, kldiv = [], []
+        for z in q.rsample([self.k]):
+            log_p.append(self.decoder(z).log_prob(X))
+            kldiv.append(pi.log_prob(z) - q.log_prob(z))
 
-        log_iw = torch.stack([l + k for l, k in zip(ll, kl)], dim=0)
+        # log_p and kldiv are both `self.k x batch`
+        log_p, kldiv = torch.stack(log_p, dim=0), torch.stack(kldiv, dim=0)
+        log_iw = log_p + kldiv
 
         # naïve or reverse engineered from the gradient estimator
         if self.naive_grad:
-            output = {'iwae/elbo': torch.logsumexp(log_iw, dim=0) - log(self.k)}
+            output = {'iwae': torch.logsumexp(log_iw, dim=0) - log(self.k)}
 
         else:
+            # 1/k normalization is handled by softmax here
             iw = log_iw.detach().softmax(dim=0)
-            output = {'iwae/elbo': (log_iw * iw).sum(dim=0)}
+            output = {'iwae': (log_iw * iw).sum(dim=0)}
 
         # compute sgvb for diagnostics and comparison
         with torch.no_grad():
-            output['sgvb/loglik'] = sum(ll) / self.k
-            output['sgvb/kl'] = dist.kl_divergence(q, pi)
+            output['sgvb/loglik'] = log_p.mean(dim=0)
+            output['sgvb/kl-div'] = dist.kl_divergence(q, pi)
 
         return output
 
     def training_step_end(self, outputs):
-        beta = beta_scheduler(self.current_epoch, self.beta)
+        sgvb = super().training_step_end(self, outputs)
 
-        ll = outputs['sgvb/loglik'].mean()
-        kl = outputs['sgvb/kl'].mean()
-        elbo = outputs['iwae/elbo'].mean()
-
-        return {'loss': -elbo,
+        iwae = outputs['iwae'].mean()
+        return {'loss': -iwae,
                 'log': {
-                    'iwae/elbo': elbo,
-                    'sgvb/elbo': ll - beta * kl,
-                    'sgvb/loglik': ll,
-                    'sgvb/kl-div': kl,
-                    'sgvb/beta': beta,
+                    'iwae': iwae,
+                    **sgvb['log']
                 }}

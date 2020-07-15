@@ -165,9 +165,9 @@ class ImplicitSlicePrior(ImplicitPrior):
 
         # using r.sample([n_draws_r]) would require repeating w along axis=0
         log_p = []
-        for _ in range(n_draws_r):
+        for h in r.rsample([n_draws_r]):
             # `one` hidden sample per each slice
-            p = self.decoder(r.rsample([1]).reshape(-1, *r.event_shape))
+            p = self.decoder(h.reshape(-1, *r.event_shape))
 
             # w is [n_draws_q x *q.batch_shape] x [*q.event_shape]
             log_p.append(p.log_prob(w).reshape(-1, *q.batch_shape))
