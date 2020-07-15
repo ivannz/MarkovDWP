@@ -21,7 +21,7 @@ from markovdwp.source import KernelDataset
 from markovdwp.utils.runtime import get_instance
 from markovdwp.utils.runtime import get_datasets, get_dataloaders
 
-from markovdwp.utils.dicttools import flatten, override
+from markovdwp.utils.dicttools import flatten, unflatten, override
 
 
 def sparsity(module, threshold=-0.5, prefix=''):
@@ -144,10 +144,13 @@ def main(manifest, target=None, gpus=[0], debug=False,
     # pl's Wandb logger uses reinit=true!
     # wandb.init(project='DWP Slice Replication Machine', reinit=False)
     logger = WandbLogger(project='DWP Slice Replication Machine')
-    logger.experiment.config.setdefaults(flatten(parameters))
+    
+    # sync with wandb's agent's arguments and rebuild the config
+    logger.experiment.config.setdefaults(flatten(parameters, delim='__'))
+    config = unflatten({**logger.experiment.config}, delim='__')
 
     # train the model
-    model = train(gpus, logger.experiment.config, logger)
+    model = train(gpus, config, logger)
 
     # store the model next to the manifest
     if target is not None:
