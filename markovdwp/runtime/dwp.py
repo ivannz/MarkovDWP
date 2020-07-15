@@ -144,7 +144,7 @@ class BaseDWPRuntime(BaseRuntime):
             penalties = {
                 name: partial(prior.penalty, coef=coef[name],
                               n_draws_q=1, n_draws_r=1)
-                for name, prior in priors.itmes()
+                for name, prior in priors.items()
             }
 
         # Call penalties with interface from `cplxmodule.nn.relevance`
