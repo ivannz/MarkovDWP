@@ -1,0 +1,22 @@
+project: 'DWP Slice Replication Machine'
+description: 'Run many experiments for the DWP cifar replication'
+
+program: dwp.py
+method: grid
+
+parameters:
+  manifest: # base experiment manifest
+    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/configs/dwp.json'
+  priors:
+    values: ['collapsed', 'fixed', 'trainable']
+  init:
+    values: ['default', 'prior', 'source']
+  dataset__train__train_size:
+    values: [10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240]
+  options__coef__model.kl_div:
+    value: 'dataset'
+  options__lr:
+    value: 1e-3
+  options__kind:
+    values: ['classic', 'implicit']
+

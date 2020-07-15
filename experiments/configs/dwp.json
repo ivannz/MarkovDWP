@@ -1,0 +1,70 @@
+{
+  "dataset": {
+    "train": {
+      "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR10_Train'>",
+      "root": "/home/ivan.nazarov/Github/MarkovDWP/data/cifar/",
+      "augmentation": "full",
+      "train_size": 1000,
+      "random_state": 3739494510
+    },
+    "test": {
+      "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR10_Train'>",
+      "root": "/home/ivan.nazarov/Github/MarkovDWP/data/cifar/",
+      "augmentation": "normalize"
+    }
+  },
+  "feeds": {
+    "train": {
+      "batch_size": 256,
+      "shuffle": true,
+      "pin_memory": true,
+      "num_workers": 8
+    },
+    "test": {
+      "batch_size": 256,
+      "shuffle": false,
+      "pin_memory": true,
+      "num_workers": 8
+    }
+  },
+  "trainer": {
+    "max_epochs": 300,
+    "track_grad_norm": 1.0,
+    "val_check_interval": 1.0,
+    "gradient_clip_val": 0.0,
+    "resume_from_checkpoint": null
+  },
+  "model": {
+    "cls": "<class 'markovdwp.models.cifar.BayesCIFARNet'>",
+    "k": 1.0,
+    "n_classes": 10
+  },
+  "options": {
+    "lr": 0.001,
+    "coef": {
+      "task.nll": 1.0,
+      "model": 0.0,
+      "model.kl_div": 0.001
+    },
+    "kind": "implicit",
+    "priors": {
+      "features.conv0": {
+        "path": "/home/ivan.nazarov/Github/MarkovDWP/experiments/dwp-vae__kqqz3mpl.gz",
+        "kind": "trainable"
+      },
+      "features.conv1": "features.conv2",
+      "features.conv2": {
+        "path": "/home/ivan.nazarov/Github/MarkovDWP/experiments/dwp-vae__opweigpq.gz",
+        "kind": "trainable"
+      }
+    },
+    "init": {
+      "features.conv0": "default",
+      "features.conv1": "prior",
+      "features.conv2": {
+        "root": "/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/"
+      }
+    },
+    "reset_logsigma2": false
+  }
+}
