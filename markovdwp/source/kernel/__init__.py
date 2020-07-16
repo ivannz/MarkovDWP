@@ -1,2 +1,2 @@
 from .dataset import KernelDataset
-from .dataset import MutliTaskKernelDataset
+from .dataset import LabelledKernelDataset

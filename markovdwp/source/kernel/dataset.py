@@ -171,13 +171,20 @@ class KernelDataset(Dataset):
         return type(self).__name__ + '(\n  ' + '\n  '.join(pieces) + '\n)'
 
 
-class MutliTaskKernelDataset(KernelDataset):
-    """Multitask source convolutional kernel dataset.
+class LabelledKernelDataset(KernelDataset):
+    """Labelled source convolutional kernel dataset.
 
     Parameters
     ----------
     root : str
         Path to preprocessed convolutional kernels from trained models.
+
+    sources : str, list, or None
+        Specifies convolutions of which layers to load. `str` loads
+        convolutions from a single layer, `list` -- from several lists,
+        `None` loads from all available layers. Class labels of each slice
+        are consistent and determined uniquely byt the metainfo of the
+        dataset under `root`.
 
     min_norm : float, default=1e-2
         Filter the source dataset by the specified minimal ell_2 norm.
@@ -186,53 +193,78 @@ class MutliTaskKernelDataset(KernelDataset):
         Independence assumption used to slice the dataset. Currently
         only 'mio' is supported. See `markovdwp.source.KernelDataset`
         for details.
+
+    pad : 'full' or 'selection'
+        If 'full', then pad kernels to the spatially largest convolution kernel
+        in the __whole__ dataset. If 'selection', then kernels are padded only
+        up to the spatially largest in the selected subset. This parameter
+        affects `event_shape`.
     """
 
-    def __init__(self, root, source=None, *, min_norm=1e-2, dim=None):
+    def __init__(self, root, sources=None, *, min_norm=1e-2, dim=None,
+                 pad='selection'):
+        assert pad in ('full', 'selection')
+
         self.dim = get_dim_shape('mio' if dim is None else dim)
         if self.dim != (0, 1, 2):
-            raise ValueError(f'Multi task Source Kenrel dataset can '
+            raise ValueError(f'Labelled Source Kenrel dataset can '
                              f'work only in `mio` mode. Got `{dim}`.')
 
         root = os.path.abspath(root)
         assert os.path.isdir(root)
         self.root = root
 
-        # open the vault and select the specified sources
+        # open the vault and compute the parameters for all sources
         self.meta = self.info(root, full=True)
-        if source is None:
-            source = list(self.meta['dataset'].keys())
 
-        elif isinstance(source, str):
-            source = [source]
+        # select the specified sources
+        if sources is None:
+            sources = list(self.meta['dataset'].keys())
 
-        dataset = {src: self.meta['dataset'][src] for src in source}
+        elif isinstance(sources, str):
+            sources = [sources]
+
+        # prepare the dataset details
+        dataset = self.meta['dataset']
+        shapes = {k: torch.Size(spec['shape']) for k, spec in dataset.items()}
+
+        # check the source dataset shapes for consistency
+        first, *_ = shapes.values()
+        assert all(len(first) == len(shape) for shape in shapes.values())
+        self.event_dim = tuple(i for i in range(len(first))
+                               if i not in self.dim)
 
         # require at least 1-d convolution
-        shapes = [torch.Size(spec['shape']) for spec in dataset.values()]
-        assert all(len(shapes[0]) == len(shape) for shape in shapes)
-        assert all(max(3, len(self.dim)) < len(shape) for shape in shapes)
-        assert all(shapes[0][0] == shape[0] for shape in shapes)
-
-        # similar interface and semantics as in `torch.distributions`
-        event_dim = tuple(i for i in range(len(shapes[0]))
-                          if i not in self.dim)
+        self.kernel_size = {k: shape[3:] for k, shape in shapes.items()}
+        assert all(self.kernel_size.values())
 
         # kernels are independent, and, hopefully, identically distributed
         # * tensor.shape = sample_shape + batch_shape + event_shape
-        self.sample_shape = shapes[0][0]
-        # self.batch_shape = {k: tuple(shape[i] for i in self.dim if i > 0)
-        #                     for k, shape in zip(dataset, shapes)}
-        self.batch_shape = None
+        sample_dim, *batch_dim = self.dim
+        assert all(first[0] == shape[0] for shape in shapes.values())
 
-        # get padding based on maximal shape
-        self.kernel_size = {k: shape[3:] for k, shape in zip(dataset, shapes)}
-        self.event_shape = torch.Size(map(max, zip(*self.kernel_size.values())))
+        # similar interface and semantics as in `torch.distributions`
+        self.sample_shape = first[sample_dim]
+        self.batch_shape = {k: tuple(first[i] for i in batch_dim)
+                            for k, shape in shapes.items()}
+
+        # Determine which kernels sizes should be considered
+        if pad == 'selection':
+            kernels = {k: size for k, size in self.kernel_size.items()
+                       if k in sources}
+
+        elif pad == 'full':
+            kernels = self.kernel_size
+
+        # get padding based on the spatially largest kernel
+        self.event_shape = torch.Size(map(max, zip(*kernels.values())))
         self.padding = {k: get_pad(ker, to=self.event_shape)
-                        for k, ker in self.kernel_size.items()}
+                        for k, ker in kernels.items()}
 
         indptr, tensors, indices = [0], [], []
-        for source, spec in dataset.items():
+        for source in sources:
+            spec = self.meta['dataset'][source]
+
             # look up the storage type and shape
             dtype = getattr(torch, spec['dtype'].split('.', 1)[1])
             storage_type = torch.tensor([], dtype=dtype).storage()
@@ -246,14 +278,14 @@ class MutliTaskKernelDataset(KernelDataset):
             tensor = torch.Tensor(storage).reshape(*shape)
 
             # drop `events` with small ell-2 norm
-            norms = tensor.norm(dim=event_dim, p=2)
+            norms = tensor.norm(dim=self.event_dim, p=2)
 
             tensors.append(tensor)
             indices.append((norms >= min_norm).nonzero())
             indptr.append(indptr[-1] + len(indices[-1]))
 
         # index to source interval mapping in split key-val form
-        self.sources, self.indptr = tuple(dataset), tuple(indptr)
+        self.sources, self.indptr = tuple(sources), tuple(indptr)
 
         # other dataset attributes are dicts
         self.tensors = dict(zip(self.sources, tensors))
