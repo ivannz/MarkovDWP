@@ -22,8 +22,10 @@ from ..runtime.trainer import get_trainer
 from functools import partial
 from ..runtime.utils.common import linear
 
+from ..utils.vendor.pytorch_lightning import GradInformation
 
-class ClassificationRuntime(BaseClassificationRuntime):
+
+class ClassificationRuntime(GradInformation, BaseClassificationRuntime):
     def configure_optimizers(self):
         optim = torch.optim.Adam(self.parameters(), lr=self.lr)
 

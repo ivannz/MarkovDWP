@@ -11,8 +11,6 @@ from torch.distributions.kl import _batch_mahalanobis
 from functools import partial
 from .utils.common import linear
 
-from ..utils.vendor.pytorch_lightning import GradInformation
-
 
 class NormalARD(dist.Normal):
     pass
@@ -44,7 +42,7 @@ def beta_scheduler(step, beta):
     return beta
 
 
-class SGVBRuntime(GradInformation, pl.LightningModule):
+class SGVBRuntime(pl.LightningModule):
     def __init__(self, encoder, decoder, *, beta, lr, n_draws=1):
         super().__init__()
         self.encoder, self.decoder = encoder, decoder

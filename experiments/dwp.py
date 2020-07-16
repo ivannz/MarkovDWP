@@ -22,6 +22,7 @@ from markovdwp.utils.runtime import get_instance
 from markovdwp.utils.runtime import get_datasets, get_dataloaders
 
 from markovdwp.utils.dicttools import flatten, unflatten, override
+from markovdwp.utils.vendor.pytorch_lightning import GradInformation
 
 
 def sparsity(module, threshold=-0.5, prefix=''):
@@ -41,7 +42,7 @@ def reset_variational_parameters(self):
         self.log_sigma2.data.uniform_(-5, -5)
 
 
-class Runtime(BaseDWPRuntime, BaseClassificationRuntime):
+class Runtime(GradInformation, BaseDWPRuntime, BaseClassificationRuntime):
     def __init__(self, core, *, coef, lr, kind, priors, init,
                  reset_logsigma2=False):
         super().__init__(core, coef=coef, lr=lr,

@@ -5,8 +5,6 @@ import torch.nn.functional as F
 
 from .utils.common import weighted_sum, prepare_log, collate
 
-from ..utils.vendor.pytorch_lightning import GradInformation
-
 from ..nn.base import named_penalties
 
 
@@ -20,7 +18,7 @@ def named_l2_norm_penalties(module, reduction='sum', prefix=''):
                                prefix=prefix, penalties=overrides)
 
 
-class BaseRuntime(GradInformation, pl.LightningModule):
+class BaseRuntime(pl.LightningModule):
     def __init__(self, core, *, coef, lr):
         super().__init__()
         self.core, self.coef, self.lr = core, coef, lr
