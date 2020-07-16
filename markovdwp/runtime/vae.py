@@ -44,36 +44,54 @@ def beta_scheduler(step, beta):
     return beta
 
 
-class VAERuntime(GradInformation, pl.LightningModule):
-    def __init__(self, encoder, decoder, *, beta, lr):
+class SGVBRuntime(GradInformation, pl.LightningModule):
+    def __init__(self, encoder, decoder, *, beta, lr, n_draws=1):
         super().__init__()
         self.encoder, self.decoder = encoder, decoder
+
+        self.n_draws = n_draws
+
         self.beta, self.lr = beta, lr
-        self.k = 1  # default k to one in VAE, see Kingma and Welling (2019)
 
         # zero and one for the std Gaussian prior
         self.register_buffer('nilone', torch.tensor([0., 1.]))
 
+    def prior(self, event_shape):
+        # kl-std normal: factorized std gaussian prior
+        return Independent(
+            Normal(*self.nilone).expand(event_shape), len(event_shape))
+
     def forward(self, input):
+        # default single-draw forward pass, see Kingma and Welling (2019)
         q = self.encoder(input)
         p = self.decoder(q.rsample())
 
-        # kl-std normal: factorized std gaussian prior
-        pi = Independent(
-            Normal(*self.nilone).expand(q.event_shape), len(q.event_shape))
-
-        return p, pi, q
+        return p, self.prior(q.event_shape), q
 
     def training_step(self, batch, batch_idx):
         if isinstance(batch, (list, tuple)):
-            batch, *dontcare = batch  # vae: only input matters
+            batch, *dontcare = batch  # classic vae: only input matters
         X = batch.unsqueeze(1)
 
-        p, pi, q = self(X)
+        if self.n_draws == 1:
+            # use default single-draw forward pass
+            p, pi, q = self(X)
+            log_p = p.log_prob(X)
+
+        else:
+            # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
+            q = self.encoder(X)
+            pi = self.prior(q.event_shape)
+
+            # (sgvb)_k = E_x E_{S~q^k(z|x)} E_{z~S} log p(x|z) pi(z) / q(z|x)
+            # log_p is `self.k x batch`
+            log_p = torch.stack([
+                self.decoder(z).log_prob(X) for z in q.rsample([self.n_draws])
+            ], dim=0).mean(dim=0)
 
         # the components are 1d with shape `batch`
         return {
-            'sgvb/loglik': p.log_prob(X),
+            'sgvb/loglik': log_p,
             'sgvb/kl-div': dist.kl_divergence(q, pi)
         }
 
@@ -101,41 +119,12 @@ class VAERuntime(GradInformation, pl.LightningModule):
         return [optim], [{'scheduler': sched, 'monitor': 'loss'}]
 
 
-class SGVBRuntime(VAERuntime):
-    def __init__(self, encoder, decoder, *, k, beta, lr):
-        assert k > 1
-
-        super().__init__(encoder=encoder, decoder=decoder, beta=beta, lr=lr)
-        self.k = k
-
-    def training_step(self, batch, batch_idx):
-        if isinstance(batch, (list, tuple)):
-            batch, *dontcare = batch  # vae: only input matters
-        X = batch.unsqueeze(1)
-
-        # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
-        q = self.encoder(X)
-        pi = Independent(
-            Normal(*self.nilone).expand(q.event_shape), len(q.event_shape))
-
-        # (sgvb)_k = E_x E_{S~q^k(z|x)} E_{z~S} log p(x|z) pi(z) / q(z|x)
-        # log_p is `self.k x batch`
-        log_p = torch.stack([
-            self.decoder(z).log_prob(X) for z in q.rsample([self.k])
-        ], dim=0)
-
-        return {
-            'sgvb/loglik': log_p.mean(dim=0),
-            'sgvb/kl-div': dist.kl_divergence(q, pi)
-        }
-
-
-class IWAERuntime(VAERuntime):
-    def __init__(self, encoder, decoder, *, k, beta, lr, naive_grad=True):
-        assert k > 1
-
-        super().__init__(encoder=encoder, decoder=decoder, beta=beta, lr=lr)
-        self.k, self.naive_grad = k, naive_grad
+class IWAERuntime(SGVBRuntime):
+    def __init__(self, encoder, decoder, *, beta, lr, n_draws,
+                 naive_grad=True):
+        assert n_draws > 1
+        super().__init__(encoder, decoder, beta=beta, lr=lr, n_draws=n_draws)
+        self.n_draws, self.naive_grad = n_draws, naive_grad
 
     def training_step(self, batch, batch_idx):
         if isinstance(batch, (list, tuple)):
@@ -144,35 +133,36 @@ class IWAERuntime(VAERuntime):
 
         # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
         q = self.encoder(X)
-        pi = Independent(
-            Normal(*self.nilone).expand(q.event_shape), len(q.event_shape))
+        pi = self.prior(q.event_shape)
 
         # (iwae)_k = E_x E_{S~q^k(z|x)} log E_{z~S} p(x|z) pi(z) / q(z|x)
         #  * like (sgvb)_k but E_z and log are interchanged
         log_p, kldiv = [], []
-        for z in q.rsample([self.k]):
+        for z in q.rsample([self.n_draws]):
             log_p.append(self.decoder(z).log_prob(X))
             kldiv.append(pi.log_prob(z) - q.log_prob(z))
 
-        # log_p and kldiv are both `self.k x batch`
+        # log_p and kldiv are both `self.n_draws x batch`
         log_p, kldiv = torch.stack(log_p, dim=0), torch.stack(kldiv, dim=0)
         log_iw = log_p + kldiv
 
+        # ASSUMPTION: `q` is reparameterizable and `z` are continuous rv
         # naïve or reverse engineered from the gradient estimator
+        outputs = {}
         if self.naive_grad:
-            output = {'iwae': torch.logsumexp(log_iw, dim=0) - log(self.k)}
+            outputs['iwae'] = torch.logsumexp(log_iw, dim=0) - log(self.n_draws)
 
         else:
-            # 1/k normalization is handled by softmax here
+            # `1 / n_draws` normalization is handled by softmax here
             iw = log_iw.detach().softmax(dim=0)
-            output = {'iwae': (log_iw * iw).sum(dim=0)}
+            outputs['iwae'] = (log_iw * iw).sum(dim=0)
 
         # compute sgvb for diagnostics and comparison
         with torch.no_grad():
-            output['sgvb/loglik'] = log_p.mean(dim=0)
-            output['sgvb/kl-div'] = dist.kl_divergence(q, pi)
+            outputs['sgvb/loglik'] = log_p.mean(dim=0)
+            outputs['sgvb/kl-div'] = dist.kl_divergence(q, pi)
 
-        return output
+        return outputs
 
     def training_step_end(self, outputs):
         sgvb = super().training_step_end(self, outputs)
