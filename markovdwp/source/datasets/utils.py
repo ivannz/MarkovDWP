@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from torch.utils.data import Subset
 
@@ -52,3 +53,37 @@ def check_random_state(seed):
     random_state.set_state(('MT19937', mt19937, pos))
 
     return random_state
+
+
+def undersample(dataset, random_state=None):
+    targets = dataset.targets
+    if not isinstance(dataset.targets, torch.Tensor):
+        targets = torch.tensor(targets)
+
+    targets = targets.cpu().numpy()
+
+    # count the label frequency
+    counts = dict(zip(*np.unique(targets, return_counts=True)))
+    n_minority = counts[min(counts, key=counts.get)]
+
+    # get minority class
+    indices, random_state = [], check_random_state(random_state)
+    for label in counts:
+        index = np.flatnonzero(targets == label)
+        if len(index) > n_minority:
+            index = random_state.choice(index, size=n_minority, replace=False)
+        indices.append(index)
+    indices = np.concatenate(indices, axis=0)
+
+    # get the subset and pass on the `targets`
+    dataset = Subset(dataset, indices)
+    dataset.targets = torch.from_numpy(targets[indices])
+
+    return dataset
+
+
+def undersampled_split(dataset, train_size=None, random_state=None):
+    random_state = check_random_state(random_state)
+
+    dataset = undersample(dataset, random_state)
+    return stratified_split(dataset, train_size, random_state)
