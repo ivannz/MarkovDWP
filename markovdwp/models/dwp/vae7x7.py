@@ -14,10 +14,9 @@ class Encoder(Module):
 
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L135
     """
-    def __init__(self, x_dim=1, z_dim=2, h_dim=32, softplus=True):
+    def __init__(self, x_dim=1, z_dim=2, h_dim=32):
         super().__init__()
         self.x_dim, self.z_dim, self.h_dim = x_dim, z_dim, h_dim
-        self.softplus = softplus
 
         self.features = torch.nn.Sequential(
             Conv2d(1 * x_dim, 1 * h_dim, 3),
@@ -51,10 +50,9 @@ class Decoder(Module):
 
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L110
     """
-    def __init__(self, z_dim=2, x_dim=1, h_dim=32, softplus=True):
+    def __init__(self, z_dim=2, x_dim=1, h_dim=32):
         super().__init__()
         self.z_dim, self.x_dim, self.h_dim = z_dim, x_dim, h_dim
-        self.softplus = softplus
 
         self.features = torch.nn.Sequential(
             ConvTranspose2d(

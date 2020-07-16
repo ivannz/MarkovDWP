@@ -100,7 +100,7 @@ class KernelDataset(Dataset):
 
         return meta if full else meta['dataset']
 
-    def __init__(self, root, source, dim='mio', min_norm=1e-2):
+    def __init__(self, root, source, *, dim='mio', min_norm=1e-2):
 
         root = os.path.abspath(root)
         assert os.path.isdir(root)
