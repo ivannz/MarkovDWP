@@ -206,9 +206,7 @@ class MutliTaskKernelDataset(KernelDataset):
         elif isinstance(source, str):
             source = [source]
 
-        dataset = self.meta['dataset'] = {
-            src: self.meta['dataset'][src] for src in source
-        }
+        dataset = {src: self.meta['dataset'][src] for src in source}
 
         # require at least 1-d convolution
         shapes = [torch.Size(spec['shape']) for spec in dataset.values()]
@@ -254,20 +252,32 @@ class MutliTaskKernelDataset(KernelDataset):
             indices.append((norms >= min_norm).nonzero())
             indptr.append(indptr[-1] + len(indices[-1]))
 
-        self.tensors, self.indptr = tuple(tensors), tuple(indptr)
-        self.sources, self.indices = tuple(dataset), tuple(indices)
+        # index to source interval mapping in split key-val form
+        self.sources, self.indptr = tuple(dataset), tuple(indptr)
+
+        # other dataset attributes are dicts
+        self.tensors = dict(zip(self.sources, tensors))
+        self.indices = dict(zip(self.sources, indices))
+
+        # map source names to class labels in order of enumeration in `meta`
+        self.labels = {k: i for i, k in enumerate(self.meta['dataset'])}
+
+        # create a `targets` array for compatibility with startified_split
+        self.targets = torch.full((self.indptr[-1],), 0, dtype=torch.uint8)
+        for src, m, n in zip(self.sources, self.indptr[1:], self.indptr):
+            self.targets[n:m] = self.labels[src]
 
     def __getitem__(self, index):
         index = len(self) + index if index < 0 else index
 
         key = bisect_right(self.indptr, index) - 1  # a[:k] <= v < a[k:]
         if not (0 <= key < len(self.sources)):
-            raise KeyError
+            raise IndexError
 
-        i = self.indices[key][index - self.indptr[key]]
-        tensor = self.tensors[key][i[0], i[1], i[2]]
-
-        return F.pad(tensor, self.padding[self.sources[key]]), key
+        source = self.sources[key]
+        ix = self.indices[source][index - self.indptr[key]]
+        tensor = self.tensors[source][ix[0], ix[1], ix[2]]
+        return F.pad(tensor, self.padding[source]), self.labels[source]
 
     def __len__(self):
         return self.indptr[-1]
