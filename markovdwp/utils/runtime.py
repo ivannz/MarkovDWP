@@ -1,4 +1,5 @@
 import re
+import sys
 import importlib
 
 from torch.utils.data import DataLoader
@@ -46,3 +47,25 @@ def get_dataloaders(datasets, feeds):
         feed: DataLoader(datasets[feed], **settings)
         for feed, settings in feeds.items()
     }
+
+
+def register(name, *bases, **methods):
+    typename = sys.intern(str(name))
+    result = type(typename, bases, methods)
+
+    # This enables pickling of the dynamic type. Don't question the dark magic.
+    # Idea: lookup the module's name in the globals of the calling frame, and
+    # force assign the dynamically created class (type) to the declared `name`.
+    try:
+        # Access the __caller's__ visible namespace and exec context (frame).
+        f_globals = sys._getframe(1).f_globals
+        # `f_globals` refers to the global namespace seen by the `caller`.
+
+        result.__module__ = f_globals.get('__name__', '__main__')
+        f_globals[typename] = result
+
+    except (AttributeError, ValueError):
+        # if we end up here we've got bigger problems to worry than pickling.
+        pass
+
+    return result
