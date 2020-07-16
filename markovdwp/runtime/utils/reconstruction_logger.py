@@ -4,7 +4,7 @@ import wandb
 import matplotlib.pyplot as plt
 
 from pytorch_lightning.callbacks.base import Callback
-from ...source.utils.plotting import plot_slices
+from ...utils.plotting import plot_slices
 
 
 def as_tuple(o):
