@@ -190,8 +190,9 @@ class LabelledKernelDataset(KernelDataset):
         are consistent and determined uniquely byt the metainfo of the
         dataset under `root`.
 
-    min_norm : float, default=1e-2
-        Filter the source dataset by the specified minimal ell_2 norm.
+    min_norm : dict of floats, or float, default=1e-2
+        Filter the source datasets by the specified minimal ell_2 norm.
+        Different thershold can be specified for each source.
 
     dim : str, or None, default='mio'
         Independence assumption used to slice the dataset. Currently
@@ -220,6 +221,16 @@ class LabelledKernelDataset(KernelDataset):
 
         # open the vault and compute the parameters for all sources
         self.meta = self.info(root, full=True)
+
+        # figure out the min_norm setting
+        if isinstance(min_norm, float):
+            min_norm = dict.fromkeys(self.meta['dataset'], min_norm)
+
+        missing = min_norm.keys() - self.meta['dataset'].keys()
+        if missing:
+            raise ValueError(f'`min_norm` contains the following '
+                             f'unrecognized sources `{missing}`.')
+        self.min_norm = min_norm
 
         # select the specified sources
         if sources is None:
@@ -285,7 +296,7 @@ class LabelledKernelDataset(KernelDataset):
             norms = tensor.norm(dim=self.event_dim, p=2)
 
             tensors.append(tensor)
-            indices.append((norms >= min_norm).nonzero())
+            indices.append((norms >= self.min_norm[source]).nonzero())
             indptr.append(indptr[-1] + len(indices[-1]))
 
         # index to source interval mapping in split key-val form
