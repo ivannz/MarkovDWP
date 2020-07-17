@@ -208,6 +208,15 @@ class ImplicitSlicePrior(ImplicitPrior):
             Normal(*self.nilone).expand(event_shape),
             len(event_shape))
 
-        c_out, c_in, *spatial = weight_shape
-        h = pi.sample((c_out, c_in)).reshape(-1, *pi.event_shape)
-        return self.decoder(h).sample().reshape(weight_shape)
+        dim, (n_samples, n_size, *spatial) = 0, weight_shape
+        if n_samples > n_size:
+            dim, n_samples, n_size = 1, n_size, n_samples
+
+        sample = []
+        for _ in range(n_samples):
+            # n_size x [*pi.event_shape]
+            h = pi.sample([n_size]).reshape(-1, *pi.event_shape)
+            # n_size x [*spatial]
+            sample.append(self.decoder(h).sample().reshape(-1, *spatial))
+
+        return torch.stack(sample, dim=dim)
