@@ -78,8 +78,8 @@ def from_source(module, root, source):
 
     # setup the dataloader
     c_out, c_in, *dontcare = weight.shape
-    sample = next(iter(DataLoader(dataset, batch_size=c_in * c_out,
-                                  shuffle=True, num_workers=8)))
+    sample, *dontcare = next(iter(DataLoader(dataset, batch_size=c_in * c_out,
+                                             shuffle=True, num_workers=8)))
 
     weight.data.copy_(sample.reshape_as(weight))
 

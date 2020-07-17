@@ -141,22 +141,26 @@ class KernelDataset(Dataset):
         norms = self.tensor.norm(dim=event_dim, p=2)
         self.indices = (norms >= min_norm).nonzero()
 
+        # figure out the label associated to this source
+        labels = {k: i for i, k in enumerate(self.meta['dataset'])}
+        self.label = labels[self.source]
+
     def __getitem__(self, index):
         index = len(self) + index if index < 0 else index
 
         i = self.indices[index]
         source = self.tensor[i[0]]
         if self.dim == (0, 1, 2):
-            return source[i[1], i[2]]
+            return source[i[1], i[2]], self.label
 
         elif self.dim == (0, 1):
-            return source[i[1], :]
+            return source[i[1], :], self.label
 
         elif self.dim == (0, 2):
-            return source[:, i[1]]
+            return source[:, i[1]], self.label
 
         elif self.dim == (0,):
-            return source
+            return source, self.label
 
     def __len__(self):
         return len(self.indices)
