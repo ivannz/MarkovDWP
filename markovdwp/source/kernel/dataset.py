@@ -225,12 +225,14 @@ class LabelledKernelDataset(KernelDataset):
         # figure out the min_norm setting
         if isinstance(min_norm, float):
             min_norm = dict.fromkeys(self.meta['dataset'], min_norm)
+        elif not isinstance(min_norm, dict):
+            raise TypeError(f'`min_norm` must either be a dict of floats '
+                            f'or a float. Got `{type(min_norm).__name__}`.')
 
         missing = min_norm.keys() - self.meta['dataset'].keys()
         if missing:
             raise ValueError(f'`min_norm` contains the following '
                              f'unrecognized sources `{missing}`.')
-        self.min_norm = min_norm
 
         # select the specified sources
         if sources is None:
@@ -238,6 +240,9 @@ class LabelledKernelDataset(KernelDataset):
 
         elif isinstance(sources, str):
             sources = [sources]
+
+        assert all(src in min_norm for src in sources)
+        self.min_norm = min_norm
 
         # prepare the dataset details
         dataset = self.meta['dataset']
