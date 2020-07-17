@@ -58,10 +58,12 @@ class SGVBRuntime(pl.LightningModule):
         # zero and one for the std Gaussian prior
         self.register_buffer('nilone', torch.tensor([0., 1.]))
 
+    @property
+    def prior(self):
         # kl-std normal: factorized std gaussian prior
         event_shape = self.encoder.event_shape
-        self.prior = Independent(Normal(*self.nilone).expand(event_shape),
-                                 len(event_shape))
+        return Independent(Normal(*self.nilone).expand(event_shape),
+                           len(event_shape))
 
     def forward(self, input):
         # default single-draw forward pass, see Kingma and Welling (2019)
