@@ -44,6 +44,10 @@ def beta_scheduler(step, beta):
 
 class SGVBRuntime(pl.LightningModule):
     def __init__(self, encoder, decoder, *, beta, lr, n_draws=1):
+        # XXX this is how we test for proper object atm
+        assert hasattr(encoder, 'event_shape')
+        assert hasattr(decoder, 'event_shape')
+
         super().__init__()
         self.encoder, self.decoder = encoder, decoder
 
@@ -54,17 +58,17 @@ class SGVBRuntime(pl.LightningModule):
         # zero and one for the std Gaussian prior
         self.register_buffer('nilone', torch.tensor([0., 1.]))
 
-    def prior(self, event_shape):
         # kl-std normal: factorized std gaussian prior
-        return Independent(
-            Normal(*self.nilone).expand(event_shape), len(event_shape))
+        event_shape = self.encoder.event_shape
+        self.prior = Independent(Normal(*self.nilone).expand(event_shape),
+                                 len(event_shape))
 
     def forward(self, input):
         # default single-draw forward pass, see Kingma and Welling (2019)
         q = self.encoder(input)
         p = self.decoder(q.rsample())
 
-        return p, self.prior(q.event_shape), q
+        return p, q
 
     def training_step(self, batch, batch_idx):
         if isinstance(batch, (list, tuple)):
@@ -73,13 +77,12 @@ class SGVBRuntime(pl.LightningModule):
 
         if self.n_draws == 1:
             # use default single-draw forward pass
-            p, pi, q = self(X)
+            p, q = self(X)
             log_p = p.log_prob(X)
 
         else:
             # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
             q = self.encoder(X)
-            pi = self.prior(q.event_shape)
 
             # (sgvb)_k = E_x E_{S~q^k(z|x)} E_{z~S} log p(x|z) pi(z) / q(z|x)
             # log_p is `self.k x batch`
@@ -90,7 +93,7 @@ class SGVBRuntime(pl.LightningModule):
         # the components are 1d with shape `batch`
         return {
             'sgvb/loglik': log_p,
-            'sgvb/kl-div': dist.kl_divergence(q, pi)
+            'sgvb/kl-div': dist.kl_divergence(q, self.prior)
         }
 
     def training_step_end(self, outputs):
@@ -131,14 +134,13 @@ class IWAERuntime(SGVBRuntime):
 
         # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
         q = self.encoder(X)
-        pi = self.prior(q.event_shape)
 
         # (iwae)_k = E_x E_{S~q^k(z|x)} log E_{z~S} p(x|z) pi(z) / q(z|x)
         #  * like (sgvb)_k but E_z and log are interchanged
         log_p, kldiv = [], []
         for z in q.rsample([self.n_draws]):
             log_p.append(self.decoder(z).log_prob(X))
-            kldiv.append(pi.log_prob(z) - q.log_prob(z))
+            kldiv.append(self.prior.log_prob(z) - q.log_prob(z))
 
         # log_p and kldiv are both `self.n_draws x batch`
         log_p, kldiv = torch.stack(log_p, dim=0), torch.stack(kldiv, dim=0)
@@ -158,7 +160,7 @@ class IWAERuntime(SGVBRuntime):
         # compute sgvb for diagnostics and comparison
         with torch.no_grad():
             outputs['sgvb/loglik'] = log_p.mean(dim=0)
-            outputs['sgvb/kl-div'] = dist.kl_divergence(q, pi)
+            outputs['sgvb/kl-div'] = dist.kl_divergence(q, self.prior)
 
         return outputs
 
