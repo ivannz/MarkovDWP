@@ -57,7 +57,7 @@ class SliceReconstructionLogger(Callback):
         assert ref_x.dim() == 4 and ref_x.shape[1] == 1
 
         lo, hi = get_range(ref_x)
-        self.imshow = dict(vmax=hi, vmin=lo, **imshow)
+        self.imshow = dict(vmax=hi, vmin=lo, cmap=plt.cm.coolwarm, **imshow)
 
         self.ref_x, self.ref_z = ref_x, ref_z
         self.scatter, self.sample = scatter, sample
