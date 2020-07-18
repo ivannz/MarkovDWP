@@ -1,6 +1,8 @@
 import torch
 import wandb
 
+from math import log
+
 import matplotlib.pyplot as plt
 
 from pytorch_lightning.callbacks.base import Callback
@@ -50,8 +52,35 @@ def reverse(vae, z, sample=True):
     return p, q
 
 
+def log_lik_is(vae, x, n_draws=1000):
+    """Estimate log-likelihood of `x` with importance sampling."""
+    # make sure to re-enable train mode and grads!
+    vae.eval()
+    with torch.no_grad():
+        r = vae.encoder(x)
+
+        # log iw(x, h) = log p(x|h) + log pi(h) - log r(h|x)
+        log_iw = torch.stack([
+            vae.decoder(h).log_prob(x) + vae.prior.log_prob(h) - r.log_prob(h)
+            for h in r.sample([n_draws])
+        ], dim=0)
+
+        # p(x) = \hat{E}_{h \sim S} p(x|h) pi(h) / r(h|x)
+        log_lik = log_iw.logsumexp(dim=0) - log(n_draws)
+
+        # # variance = E iw^2 - (E iw)^2 = E exp (2 log_iw) - exp (2 log E iw)
+        # #          = exp [log E exp (2 log_iw)] - exp (2 log_lik)
+        # # log std = log_lik + log {exp [log E exp (2 log_iw) - 2 log_lik] - 1} / 2
+        # log_iw_dbl = torch.logsumexp(2 * log_iw, dim=0) - log(n_draws)
+        # log_std = (log_iw_dbl - 2 * log_lik).expm1().log() / 2 + log_lik
+    vae.train()
+
+    return log_lik
+
+
 class SliceReconstructionLogger(Callback):
-    def __init__(self, ref_x, ref_z=None, scatter=True, sample=True, **imshow):
+    def __init__(self, ref_x, ref_z=None, scatter=True,
+                 n_draws_is=100, sample=True, **imshow):
         if ref_x.dim() == 3:
             ref_x = ref_x.unsqueeze(1)
         assert ref_x.dim() == 4 and ref_x.shape[1] == 1
@@ -61,6 +90,7 @@ class SliceReconstructionLogger(Callback):
 
         self.ref_x, self.ref_z = ref_x, ref_z
         self.scatter, self.sample = scatter, sample
+        self.n_draws_is = n_draws_is
 
     # callbacks related to filter plotting
     def on_train_start(self, trainer, pl_module):
@@ -97,6 +127,10 @@ class SliceReconstructionLogger(Callback):
                 'task/gen': plot_slices(gen[:, 0], f_aspect=1., **self.imshow),
                 'diag/ll_z': e.log_prob(ref_z).mean().cpu(),
             })
+
+        # track IS estimate of the reference sample
+        log_lik = log_lik_is(pl_module, ref_x, self.n_draws_is)
+        output['diag/ll_x_is'] = log_lik.mean()
 
         # commit with the next call to pl's logger
         wandb.log(output, commit=False)
