@@ -167,7 +167,7 @@ class IWAERuntime(SGVBRuntime):
         return outputs
 
     def training_step_end(self, outputs):
-        sgvb = super().training_step_end(self, outputs)
+        sgvb = super().training_step_end(outputs)
 
         iwae = outputs['iwae'].mean()
         return {'loss': -iwae,
