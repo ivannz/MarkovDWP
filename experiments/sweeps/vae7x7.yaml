@@ -13,7 +13,7 @@ parameters:
     values:
       - "<class 'markovdwp.runtime.vae.SGVBRuntime'>"
       - "<class 'markovdwp.runtime.vae.IWAERuntime'>"
-  n_draws:
+  options__n_draws:
     values: [1, 10, 50]
   feeds__train__batch_size:
     values: [64, 256]
