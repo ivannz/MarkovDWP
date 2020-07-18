@@ -65,8 +65,10 @@ class SliceReconstructionLogger(Callback):
     # callbacks related to filter plotting
     def on_train_start(self, trainer, pl_module):
         # commit source slices only once
+        fig = plot_slices(self.ref_x[:, 0], **self.imshow)
         wandb.log({
-            'task/src': plot_slices(self.ref_x[:, 0], **self.imshow),
+            # add zeroth rec, since very first reconstruction is noise anyway.
+            'task/src': fig, 'task/rec': fig,
         }, commit=False)
 
     def on_epoch_end(self, trainer, pl_module):
