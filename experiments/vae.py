@@ -80,7 +80,7 @@ def train(gpus, config, logger=None):
 
     datasets = get_datasets(config['dataset'])
     if 'resampling' in config:
-        datasets = apply_resampling(datasets, config['resampling'])
+        datasets.update(apply_resampling(datasets, config['resampling']))
     feeds = get_dataloaders(datasets, config['feeds'])
 
     # if 'reference' dataset exists, then we create a reconstruction logger
