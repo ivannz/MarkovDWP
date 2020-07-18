@@ -107,7 +107,7 @@ def train(gpus, config, logger=None):
 
         raise
 
-    pl_module.core.cpu().eval()
+    pl_module.cpu().eval()
     return pl_module.encoder, pl_module.decoder
 
 
