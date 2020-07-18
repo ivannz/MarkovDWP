@@ -80,7 +80,7 @@ def log_lik_is(vae, x, n_draws=1000):
 
 class SliceReconstructionLogger(Callback):
     def __init__(self, ref_x, ref_z=None, scatter=True,
-                 n_draws_is=100, sample=True, **imshow):
+                 n_draws_is=1000, sample=True, **imshow):
         if ref_x.dim() == 3:
             ref_x = ref_x.unsqueeze(1)
         assert ref_x.dim() == 4 and ref_x.shape[1] == 1

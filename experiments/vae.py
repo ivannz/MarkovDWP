@@ -86,14 +86,15 @@ def train(gpus, config, logger=None):
     # if 'reference' dataset exists, then we create a reconstruction logger
     if 'reference' in datasets:
         X, y, *rest = zip(*datasets['reference'])
-        order = sorted(range(len(y)), key=y.__getitem__)
 
+        order = sorted(range(len(y)), key=y.__getitem__)
         ref_x = torch.stack([X[i] for i in order], dim=0)
+
         ref_z = pl_module.prior.sample([len(ref_x)])
 
         pl_trainer.callbacks.append(
-            SliceReconstructionLogger(
-                ref_x.unsqueeze(1), ref_z, scatter=False))
+            SliceReconstructionLogger(ref_x.unsqueeze(1), ref_z,
+                                      n_draws_is=1000, scatter=False))
 
     # do the training
     try:
