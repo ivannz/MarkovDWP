@@ -181,8 +181,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Preprocess model snapshots into kernel dataset, '
-                    'stored in an automatically generated directory.',
+        description='Run a A classification experiments with Deep Weight '
+                    'Prior.',
         add_help=True)
 
     parser.add_argument(
