@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='MarkovDWP',
-    version='0.6.5',
+    version='0.7',
     description='''Backend for experiments with Deep Weight Prior''',
     license='MIT License',
     packages=[
