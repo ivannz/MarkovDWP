@@ -118,7 +118,7 @@ def pack(module):
     parameters = {}
     # adopt sklearn's convention: save arguments in instance's `__dict__`
     for name, p in signature(type(module)).parameters.items():
-        # ignore pure var-kwargs
+        # ignore variable keyworded args
         if p.kind == p.VAR_KEYWORD:
             continue
 
