@@ -7,6 +7,8 @@ method: grid
 parameters:
   manifest: # base experiment manifest
     value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/configs/vae7x7.json'
+  target: # the directory whereto the vaes are saved
+    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/snapshots-slice_vae/'
   runtime:
     values:
       - "<class 'markovdwp.runtime.vae.SGVBRuntime'>"
@@ -19,3 +21,5 @@ parameters:
     values: [2, 4]
   options__lr:
     value: 1e-3
+  order:
+    values: [0, 1]
