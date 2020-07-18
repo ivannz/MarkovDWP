@@ -5,6 +5,8 @@ program: vae.py
 method: grid
 
 parameters:
+  tags:
+    value: 'slice-vae, Slices VAE'
   manifest: # base experiment manifest
     value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/configs/vae7x7.json'
   target: # the directory whereto the vaes are saved

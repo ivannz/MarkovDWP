@@ -5,7 +5,7 @@ program: dwp.py
 method: grid
 
 parameters:
-  tags: # base experiment manifest
+  tags:
     value: 'dwp, Slices DWP, Fib Size'
   target:
     value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/snapshots/'
