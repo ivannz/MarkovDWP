@@ -148,7 +148,7 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None):
 
         # save under a random name if target is a directory
         fid, target = tempfile.mkstemp(dir=target, suffix='.gz',
-                                       prefix=tag + ('__' if tag else ''))
+                                       prefix=tag + '__' if tag else tag)
         os.close(fid)
 
     elif os.path.exists(target):
