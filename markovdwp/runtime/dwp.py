@@ -1,6 +1,5 @@
 import os
 import torch
-import gzip
 
 from functools import partial
 from collections.abc import Hashable
@@ -18,6 +17,7 @@ from ..source import KernelDataset
 
 from ..utils.dicttools import propagate, add_prefix, resolve
 from ..utils.runtime import get_instance
+from ..utils.io import load
 
 
 def unpack(state):
@@ -29,9 +29,7 @@ def unpack(state):
 def load_prior(path, kind='trainable'):
     assert kind in ('collapsed', 'fixed', 'trainable')
 
-    with gzip.open(path, 'rb') as fin:
-        snapshot = torch.load(fin, map_location=torch.device('cpu'))
-
+    snapshot = load(path)
     decoder = unpack(snapshot['decoder']).requires_grad_(False)
     encoder = unpack(snapshot['encoder'])
 
