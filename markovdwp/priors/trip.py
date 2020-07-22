@@ -96,10 +96,10 @@ def trip_index_sample(k, cores):
             index.append(ix)
 
         # the trace of `tail` is the unnormalized prob of the sample
-        log_p.append(tail.trace().log())
+        log_p.append(tail.trace())
         sample.append(index[::-1])
 
-    log_p = torch.stack(log_p, dim=0) - norm.trace().log()
+    log_p = torch.stack(log_p, dim=0).log() - norm.trace().log()
     return torch.tensor(sample, device=log_p.device), log_p
 
 
@@ -125,7 +125,9 @@ def trip_index_log_prob(index, cores):
         # H_1 = I, H_k = \prod_{1 \leq s < k} \sum_j G^s_j
         norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
 
-    return prob.diagonal(dim1=1, dim2=2).sum(dim=1).log() - norm.trace().log()
+    prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1)
+    log_prob = torch.clamp(prob, 1e-12).log()
+    return log_prob - norm.trace().log()
 
 
 def trip_log_prob(value, loc, log_scale, cores):
@@ -165,7 +167,9 @@ def trip_log_prob(value, loc, log_scale, cores):
         # H_1 = I, H_k = \prod_{1 \leq s < k} \sum_j G^s_j
         norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
 
-    return prob.diagonal(dim1=1, dim2=2).sum(dim=1).log() - norm.trace().log()
+    prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1)
+    log_prob = torch.clamp(prob, 1e-12).log()
+    return log_prob - norm.trace().log()
 
 
 class TRIP(torch.nn.Module):
