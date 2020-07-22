@@ -135,7 +135,8 @@ class TRIPRuntime(SGVBRuntime):
 
         # infer dimensions from the encoder's z-dim
         shape = [shape] * encoder.z_dim
-        self.trip_ = TRIP(shape, [rank] * len(shape))
+        self.trip_ = TRIP(shape, [rank] * len(shape),
+                          event_shape=encoder.event_shape)
 
     @property
     def prior(self):
@@ -154,16 +155,15 @@ class TRIPRuntime(SGVBRuntime):
         sample = q.rsample([self.n_draws])
         log_p = torch.stack([
             self.decoder(z).log_prob(X) for z in sample
-        ], dim=0)
+        ], dim=0).mean(dim=0)
 
         # log_p and log_prior are both `self.n_draws x batch`
-        sample = sample.flatten(2, -1).flatten(0, 1)
-        log_prior = self.prior.log_prob(sample).reshape_as(log_p)
+        log_prior = self.prior.log_prob(sample).mean(dim=0)
 
         # the components are 1d with shape `batch`
         return {
-            'sgvb/loglik': log_p.mean(dim=0),
-            'sgvb/kl-div': - q.entropy() - log_prior.mean(dim=0)
+            'sgvb/loglik': log_p,
+            'sgvb/kl-div': - q.entropy() - log_prior
         }
 
 
