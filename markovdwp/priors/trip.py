@@ -145,8 +145,42 @@ class TRCategorical(torch.nn.Module):
         self.reset_cores()
 
     def reset_cores(self):
-        for core in self.log_cores:
-            core.data.normal_()
+        r"""Init the cores to an `almost` uniform distribution.
+
+        Details
+        -------
+        Since $p_\alpha \propto A_\alpha$, by letting $
+          G^{(k)}_j
+            = \mathbf{1}_{r_k} \gamma_{k j} \mathbf{1}^\top_{r_{k+1}}
+        $, we make sure that $
+          A_\alpha = \prod_k r_k \gamma_{k \alpha_k}
+        $ and $
+          Z(A)
+            = \sum_\alpha A_\alpha
+            = \prod_k r_k \sum_{\alpha_k} \gamma_{k \alpha_k}
+        $. Hence
+        $$
+        p(\alpha)
+            = \prod_k \frac{
+                \gamma_{k \alpha_k}
+            }{
+                \sum_{\alpha_k} \gamma_{k \alpha_k}
+            }
+            \,, $$
+        with $\alpha \in \prod_k [d_k]$. So if $
+          \gamma_{kj} = \frac1{d_k \sqrt{r_k}}
+        $ then $
+          p(\alpha) = \prod_k \frac1{d_k}
+        $ and $
+          A_\alpha = \prod_k \frac{\sqrt{r_k}}{d_k}
+        $.
+        """
+
+        # ToDo: use tensor ring with 1/r_k mat-mat multipliers???
+        for log_core in self.log_cores:
+            dk, rk, _ = log_core.shape
+            theta = math.log(math.expm1(1 / (dk * rk)))
+            log_core.data.normal_(theta, std=0.1)
 
     @property
     def cores(self):
