@@ -128,13 +128,18 @@ class TRCategorical(torch.nn.Module):
       p(\alpha) \propto A_\alpha
     $.
     """
-    def __init__(self, shape, ranks):
+    def __init__(self, shape, ranks, event_shape=None):
         if len(ranks) == len(shape):
             ranks = ranks[-1], *ranks
         assert ranks[0] == ranks[-1]
 
         super().__init__()
         self.shape, self.ranks = torch.Size(shape), torch.Size(ranks)
+
+        if event_shape is None:
+            event_shape = (len(self.shape),)
+        self.event_shape = torch.Size(event_shape)
+        assert self.event_shape.numel() == len(self.shape)
 
         # cores are m_k x r_k x r_{k+1}
         self.log_cores = torch.nn.ParameterList([
@@ -200,18 +205,27 @@ class TRCategorical(torch.nn.Module):
         log_prob: torch.tensor
             The log-probability of each multi-index in the batch.
         """
-        return trip_index_log_prob(index, self.cores)
+        assert index.shape[-len(self.event_shape):] == self.event_shape
+        sample_shape = index.shape[:-len(self.event_shape)]
+        index = index.reshape(-1, self.event_shape.numel())
+
+        return trip_index_log_prob(index, self.cores).reshape(sample_shape)
 
     @torch.no_grad()
-    def sample(self, n_draws):
-        ix, log_p = self.sample_with_log_prob(n_draws)
+    def sample(self, sample_shape):
+        ix, log_p = self.sample_with_log_prob(sample_shape)
         return ix
 
-    def rsample(self, n_draws):
+    def rsample(self, sample_shape):
         raise NotImplementedError
 
-    def sample_with_log_prob(self, n_draws):
-        return trip_index_sample(n_draws, self.cores)
+    def sample_with_log_prob(self, sample_shape):
+        if not isinstance(sample_shape, torch.Size):
+            sample_shape = torch.Size(sample_shape)
+
+        index, log_p = trip_index_sample(sample_shape.numel(), self.cores)
+        index = index.reshape(*sample_shape, *self.event_shape)
+        return index, log_p.reshape(sample_shape)
 
 
 def gauss_log_prob(value, loc, log_scale):
@@ -238,10 +252,10 @@ class TRIP(torch.nn.Module):
        for generative models. In Advances in Neural Information Processing
        Systems (pp. 4102-4112).
     """
-    def __init__(self, shape, ranks):
+    def __init__(self, shape, ranks, event_shape=None):
         super().__init__()
 
-        self.index = TRCategorical(shape, ranks)
+        self.index = TRCategorical(shape, ranks, event_shape)
 
         # store locations and log-scales in 2d matrices in packed format
         self.location = torch.nn.Parameter(
@@ -260,6 +274,11 @@ class TRIP(torch.nn.Module):
 
             # scale is initialized to equispaced grid
             self.logscale.data[i, :n].fill_(-1.)
+
+    @property
+    def event_shape(self):
+        # mirror shapes from the index
+        return self.index.event_shape
 
     @property
     def shape(self):
@@ -306,7 +325,10 @@ class TRIP(torch.nn.Module):
             = \frac{(A \times_k p_k(z_k))_{\alpha_{-k}}}{Z(A)}
             \,. $$
         """
-        assert value.dim() == 2
+        # XXX semantics `batch_sahpe` maybe?
+        assert value.shape[-len(self.event_shape):] == self.event_shape
+        sample_shape = value.shape[:-len(self.event_shape)]
+        value = value.reshape(-1, self.event_shape.numel())
 
         prob, norm = None, None
         for i, core in enumerate(self.index.cores):
@@ -325,7 +347,9 @@ class TRIP(torch.nn.Module):
             norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
 
         prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1)
-        return torch.clamp(prob, 1e-12).log() - norm.trace().log()
+        log_prob = torch.clamp(prob, 1e-12).log() - norm.trace().log()
+
+        return log_prob.reshape(sample_shape)
 
     def rsample_from_index(self, index):
         """Sample from the chosen mode using the reparameterization.
@@ -340,14 +364,17 @@ class TRIP(torch.nn.Module):
             index, log_prob = trip.index.sample_with_log_prob(n_draws)
             values = trip.rsample_from_index(index)
         """
-        assert index.dim() == 2
+        assert index.shape[-len(self.event_shape):] == self.event_shape
+        sample_shape = index.shape[:-len(self.event_shape)]
+        index = index.reshape(-1, self.event_shape.numel())
 
         # create univariate Gaussians for each row in the index
         rows_ = torch.arange(index.shape[-1], device=self.location.device)
 
         scale = self.logscale[rows_, index].exp()
-        return self.location[rows_, index] + scale * torch.randn_like(scale)
+        samples = self.location[rows_, index] + scale * torch.randn_like(scale)
+        return samples.reshape(*sample_shape, *self.event_shape)
 
     @torch.no_grad()
-    def sample(self, n_draws):
-        return self.rsample_from_index(self.index.sample(n_draws))
+    def sample(self, sample_shape):
+        return self.rsample_from_index(self.index.sample(sample_shape))
