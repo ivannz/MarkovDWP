@@ -127,7 +127,7 @@ class IWAERuntime(SGVBRuntime):
                  naive_grad=True):
         assert n_draws > 1
         super().__init__(encoder, decoder, beta=beta, lr=lr, n_draws=n_draws)
-        self.n_draws, self.naive_grad = n_draws, naive_grad
+        self.naive_grad = naive_grad
 
     def training_step(self, batch, batch_idx):
         if isinstance(batch, (list, tuple)):
@@ -142,11 +142,11 @@ class IWAERuntime(SGVBRuntime):
         log_p, kldiv = [], []
         for z in q.rsample([self.n_draws]):
             log_p.append(self.decoder(z).log_prob(X))
-            kldiv.append(self.prior.log_prob(z) - q.log_prob(z))
+            kldiv.append(q.log_prob(z) - self.prior.log_prob(z))
 
         # log_p and kldiv are both `self.n_draws x batch`
         log_p, kldiv = torch.stack(log_p, dim=0), torch.stack(kldiv, dim=0)
-        log_iw = log_p + kldiv
+        log_iw = log_p - kldiv
 
         # ASSUMPTION: `q` is reparameterizable and `z` are continuous rv
         # naïve or reverse engineered from the gradient estimator
