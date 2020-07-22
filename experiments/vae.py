@@ -92,9 +92,6 @@ def train(gpus, config, logger=None):
 
         ref_z = pl_module.prior.sample([len(ref_x)])
 
-        # XXX properly reshape the reference latent sample
-        ref_z = ref_z.reshape(-1, *pl_module.encoder.event_shape)
-
         pl_trainer.callbacks.append(
             SliceReconstructionLogger(ref_x.unsqueeze(1), ref_z,
                                       n_draws_is=1000, scatter=False))
