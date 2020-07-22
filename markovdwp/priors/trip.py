@@ -101,8 +101,8 @@ def trip_index_log_prob(index, cores):
         # H_1 = I, H_k = \prod_{1 \leq s < k} \sum_j G^s_j
         norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
 
-    prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1)
-    return torch.clamp(prob, 1e-12).log() - norm.trace().log()
+    log_prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1).log()
+    return log_prob - norm.trace().log()
 
 
 class TRCategorical(torch.nn.Module):
