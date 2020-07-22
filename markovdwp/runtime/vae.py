@@ -130,9 +130,12 @@ class TRIPRuntime(SGVBRuntime):
     Leibler divergence of the encoder from the prior.
     """
     def __init__(self, encoder, decoder, *, beta, lr, n_draws,
-                 shape, ranks):
+                 shape, rank):
         super().__init__(encoder, decoder, beta=beta, lr=lr, n_draws=n_draws)
-        self.trip_ = TRIP(shape, ranks)
+
+        # infer dimensions from the encoder's z-dim
+        shape = [shape] * encoder.z_dim
+        self.trip_ = TRIP(shape, [rank] * len(shape))
 
     @property
     def prior(self):
