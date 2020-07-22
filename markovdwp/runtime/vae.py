@@ -11,6 +11,8 @@ from torch.distributions.kl import _batch_mahalanobis
 from functools import partial
 from .utils.common import linear
 
+from ..priors.trip import TRIP
+
 
 class NormalARD(dist.Normal):
     pass
@@ -120,6 +122,46 @@ class SGVBRuntime(pl.LightningModule):
             optim, partial(linear, t0=0, t1=self.trainer.max_epochs))
 
         return [optim], [{'scheduler': sched, 'monitor': 'loss'}]
+
+
+class TRIPRuntime(SGVBRuntime):
+    """[work-in-progress] runtime for priors that habe log-prob and are
+    sampleable, but without exact closed form expression for the Kulback-
+    Leibler divergence of the encoder from the prior.
+    """
+    def __init__(self, encoder, decoder, *, beta, lr, n_draws,
+                 shape, ranks):
+        super().__init__(encoder, decoder, beta=beta, lr=lr, n_draws=n_draws)
+        self.trip_ = TRIP(shape, ranks)
+
+    @property
+    def prior(self):
+        return self.trip_
+
+    def training_step(self, batch, batch_idx):
+        if isinstance(batch, (list, tuple)):
+            batch, *dontcare = batch  # classic vae: only input matters
+        X = batch.unsqueeze(1)
+
+        # X is `batch x [*p.event_shape]`, q.batch_shape is `batch`
+        q = self.encoder(X)
+
+        # (sgvb)_k = E_x E_{S~q^k(z|x)} E_{z~S} log p(x|z) pi(z) / q(z|x)
+        # log_p is `self.k x batch`
+        sample = q.rsample([self.n_draws])
+        log_p = torch.stack([
+            self.decoder(z).log_prob(X) for z in sample
+        ], dim=0)
+
+        # log_p and log_prior are both `self.n_draws x batch`
+        sample = sample.flatten(2, -1).flatten(0, 1)
+        log_prior = self.prior.log_prob(sample).reshape_as(log_p)
+
+        # the components are 1d with shape `batch`
+        return {
+            'sgvb/loglik': log_p.mean(dim=0),
+            'sgvb/kl-div': - q.entropy() - log_prior.mean(dim=0)
+        }
 
 
 class IWAERuntime(SGVBRuntime):
