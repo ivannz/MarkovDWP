@@ -221,6 +221,16 @@ class TRIP(torch.nn.Module):
             self.location.data[i, n:] = 0.
             self.logscale.data[i, n:] = float('-inf')
 
+    @property
+    def shape(self):
+        # mirror shapes from the index
+        return self.index.shape
+
+    @property
+    def cores(self):
+        # expose the trip cores from the index
+        return self.index.cores
+
     def log_prob(self, value):
         r"""Compute the log-probability of a batch of values w.r.t TRIP.
 
