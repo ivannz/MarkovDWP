@@ -218,12 +218,14 @@ class TRIP(torch.nn.Module):
 
     def reset_parameters(self):
         """Draw normal variates in packed format for the Gaussians in TRIP."""
-        self.location.data.normal_()
-        self.logscale.data.normal_()
-
+        self.location.data.zero_()
+        self.logscale.data.fill_(-10.)  # float('-inf')
         for i, n in enumerate(self.index.shape):
-            self.location.data[i, n:] = 0.
-            self.logscale.data[i, n:] = float('-inf')
+            # location of each dimension is initialized to equispaced grid
+            torch.linspace(-2, +2, n, out=self.location.data[i, :n])
+
+            # scale is initialized to equispaced grid
+            self.logscale.data[i, :n].fill_(-1.)
 
     @property
     def shape(self):
