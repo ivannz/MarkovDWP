@@ -44,46 +44,50 @@ def trip_index_sample(n_draws, cores, *, generator=None):
         \,. $$
     """
     # H_1 = I, H_k = \prod_{1 \leq s < k} \sum_j G^s_j
-    heads = [None, cores[0].sum(dim=0)]
+    heads = [None, cores[0].sum(dim=0, keepdims=True)]
     for core in cores[1:]:
-        heads.append(heads[-1] @ core.sum(dim=0))
+        heads.append(heads[-1] @ core.sum(dim=0, keepdims=True))
 
     # the normalization constant is given by marginalizing all dimensions
-    norm = heads.pop()
+    norm = heads.pop().squeeze(0)
 
-    sample, log_p = [], []
-    for _ in range(n_draws):
-        # sampling using the "chain"-rule from d to 1 (in core order)
-        # i_d \sim \tr( H_d G^d_{i_d}     )
-        # i_k \sim \tr( H_k G^k_{i_k} T_k ), T_k = \prod_{s > k} G^s_{i_s}
-        # i_1 \sim \tr(     G^1_{i_1} T_1 )
-        index, tail = [], None
-        for core, head in zip(cores[::-1], heads[::-1]):
-            # `w_j` is the trace of {head @ core_j @ tail}
-            if tail is None and head is None:
-                w = core.diagonal(dim1=1, dim2=2).sum(dim=1)
+    # sampling using the "chain"-rule from m down to 1 (in reverse core order)
+    # i_m \sim \tr( H_m G^m_{i_m}     )
+    # i_k \sim \tr( H_k G^k_{i_k} T_k ), T_k = \prod_{s > k} G^s_{i_s}
+    # i_1 \sim \tr(     G^1_{i_1} T_1 )
+    index, tail = [], None
+    for core, head in zip(cores[::-1], heads[::-1]):
+        # `w_k` is the trace of {head @ core_k @ tail}
+        if tail is None and head is None:
+            # `w` is `d_m`
+            w = core.diagonal(dim1=1, dim2=2).sum(dim=1)
+            w = w.unsqueeze(0).expand(n_draws, -1)
 
-            elif tail is None:
-                w = torch.tensordot(head, core, [[0, 1], [2, 1]])
+        elif tail is None:
+            # `H_m` is `1 x r_1 x r_m`, w_{i_m} = \tr( H_m G^m_{i_m} )
+            w = torch.tensordot(head, core, [[1, 2], [2, 1]])
+            w = w.expand(n_draws, -1)
 
-            elif head is None:
-                w = torch.tensordot(core, tail, [[1, 2], [1, 0]])
+        elif head is None:
+            # `T_1` is `n_draws x r_2 x r_1`, w_{i_1} = \tr( G^1_{i_1} T_1 )
+            w = torch.tensordot(tail, core, [[1, 2], [2, 1]])
 
-            else:
-                w = torch.tensordot(core, tail @ head, [[1, 2], [1, 0]])
+        else:
+            # `H_k` is `1 x r_1 x r_k`, `T_k` is `n_draws x r_{k+1} x r_1`
+            # w_{q i_k} = \tr( H_k G^k_{i_k} T_{kq} ) = \tr( T_{kq} H_k G^k_{i_k} )
+            w = torch.tensordot(tail @ head, core, [[2, 1], [1, 2]])
 
-            # sample from the core and update the tail
-            ix = int(w.multinomial(1, replacement=True, generator=generator))
-            tail = core[ix] if tail is None else core[ix] @ tail
+        # sample from the core and update the tail
+        # `w` is `n_draws x d_k`, `ix` is `n_draws x 1`
+        ix = w.multinomial(1, replacement=True, generator=generator)[:, 0]
 
-            index.append(ix)
+        # T_{k-1 q} = G^k_{i_{kq}} T_{k q} is `n_draws x r_k x r_1`
+        tail = core[ix] if tail is None else core[ix] @ tail
+        index.append(ix)
 
-        # the trace of `tail` is the unnormalized prob of the sample
-        log_p.append(tail.trace())
-        sample.append(index[::-1])
-
-    log_p = torch.stack(log_p, dim=0).log() - norm.trace().log()
-    return torch.tensor(sample, device=log_p.device), log_p
+    # the trace of `tail` is the unnormalized prob of the sample
+    log_tail = tail.diagonal(dim1=1, dim2=2).sum(dim=1).log()
+    return torch.stack(index[::-1], dim=1), log_tail - norm.trace().log()
 
 
 def trip_index_log_prob(index, cores):
