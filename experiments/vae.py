@@ -109,7 +109,7 @@ def train(gpus, config, logger=None):
         raise
 
     pl_module.cpu().eval()
-    return pl_module.encoder, pl_module.decoder
+    return pl_module.encoder, pl_module.decoder, pl_module.prior
 
 
 def pack(module):
@@ -164,7 +164,7 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None):
     config = unflatten({**logger.experiment.config}, delim='__')
 
     # train the model
-    encoder, decoder = train(gpus, config, logger)
+    encoder, decoder, prior = train(gpus, config, logger)
     if target is not None:
         with gzip.open(target, 'wb', compresslevel=9) as fout:
             torch.save({
@@ -172,10 +172,10 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None):
                 'config': config,
                 'encoder': pack(encoder),
                 'decoder': pack(decoder),
-                'prior': {},
+                'prior': pack(prior) if isinstance(prior, torch.nn.Module) else {},
             }, fout)
 
-    return encoder, decoder
+    return encoder, decoder, prior
 
 
 if __name__ == '__main__':
