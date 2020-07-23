@@ -3,8 +3,6 @@ import torch
 
 import torch.nn.functional as F
 
-from torch.distributions import Independent, Normal
-
 
 def trip_index_sample(n_draws, cores, *, generator=None):
     r"""Sample from the TR categorical index distribution and get the log-prob.
@@ -105,46 +103,84 @@ def trip_index_log_prob(index, cores):
     return log_prob - norm.trace().log()
 
 
+def flatten_event_shape(tensor, event_shape, caller=''):
+    """Check if rightmost dims of `tensor` match `event_shape` and then
+    reshape into a matrix, by independently flattening leftmost and event
+    dims.
+    """
+    tail = tensor.shape[-len(event_shape):]
+    if tail != event_shape:
+        origin = f' in {caller}' if caller else ''
+        raise ValueError(f'Event shape mismatch`{origin}`. '
+                         f'Expected `{event_shape}`. Got`{tail}`.')
+
+    sample_shape = tensor.shape[:-len(event_shape)]
+    return tensor.reshape(-1, torch.Size(event_shape).numel()), sample_shape
+
+
 class TRCategorical(torch.nn.Module):
     r"""Extremely high-dimensional categorical distribution parameterized by a
     tensor ring.
 
+    Parameters
+    ----------
+    shape : tuple
+        Dimensions of the support of the tensor ring categorical distribution.
+
+    ranks : tuple
+        The ranks of the tensor cores used in the Tensor Ring parameterization.
+        **Must** be the same length as `shape`. The higher the rank of each
+        core the richer the dependency structure in the high-dimensional
+        categorical distribution.
+
+    event_shape : tuple, or None
+        The shape of a single draw from this distribution, i.e. the event space
+        within which the support sits. If `None`, then a single variate is a
+        flat index vector of size `len(shape)`. Total number of elements taken
+        by `event_shape` **must** be equal to `len(shape)`.
+
     Details
     -------
-    Consider a positive tensor $A$ in Tensor Ring format:
+    Parameterizes a categorial distribution on $m$-dimensional support $
+      \Omega = \prod_k [d_k]
+    $ with $
+      [d_k] = \{1,\,\cdots,\,d_k\}
+    $ ($k=1..m$) by a positive-valued tensor $A$ (unnormalized): $
+      p(\alpha) \propto A_\alpha
+    $ where $
+      \alpha \in \Omega
+    $ is a single `event` (also multiindex). The tensor $A$ itself is stored
+    only approximately via the Tensor Ring format:
     $$
     A_\alpha
         = \mathop{tr}\Bigl\{ \prod_k G^{(k)}_{\alpha_k} \Bigr\}
         \,, $$
-    where $
-      \alpha \in \prod_k [d_k]
-    $ is a multiindex, $
-      [d_k] = 1,\,\cdots,\,d_k
-    $ and $
+    with positive-valued cores $
       G^{(k)} \in \mathbb{R}^{d_k \times r_k \times r_{k+1}}
-    $ are positive valued cores the Tensor Ring format.
-
-    Tensor Ring categorical posits that $
-      p(\alpha) \propto A_\alpha
+    $. The higher the ranks $r_k$ the better the approximation of the tensor
+    $A$, and thus less constrained the induced categorical distribution. For
+    example, if $r_k = $ then all dimensions in $\Omega$ are independent: $
+      p(\alpha) = \prod_k p(\alpha_k)
     $.
     """
     def __init__(self, shape, ranks, event_shape=None):
-        if len(ranks) == len(shape):
-            ranks = ranks[-1], *ranks
-        assert ranks[0] == ranks[-1]
+        assert len(ranks) == len(shape)
+
+        # verify if `event_shape` is compatible with the tensor dimensionality.
+        if event_shape is None:
+            event_shape = (len(shape),)
+        event_shape = torch.Size(event_shape)
+        assert event_shape.numel() == len(shape)
 
         super().__init__()
         self.shape, self.ranks = torch.Size(shape), torch.Size(ranks)
+        self.event_shape = event_shape
 
-        if event_shape is None:
-            event_shape = (len(self.shape),)
-        self.event_shape = torch.Size(event_shape)
-        assert self.event_shape.numel() == len(self.shape)
-
-        # cores are m_k x r_k x r_{k+1}
+        # cores `G^{(k)}` are `d_k x r_k x r_{k+1}`, k=1..m
+        ranks = *ranks, ranks[0]
         self.log_cores = torch.nn.ParameterList([
-            torch.nn.Parameter(torch.Tensor(n, r0, r1))
-            for n, r0, r1 in zip(shape, ranks, ranks[1:])
+            torch.nn.Parameter(torch.Tensor(d, r0, r1))
+            for d, r0, r1 in zip(shape, ranks, ranks[1:])
         ])
 
         self.reset_cores()
@@ -193,33 +229,38 @@ class TRCategorical(torch.nn.Module):
         return [*map(F.softplus, self.log_cores)]
 
     def log_prob(self, index):
-        """The log-probability w.r.t. the tensor-ring categorical.
+        """The log-probability density/mass w.r.t. the tensor-ring categorical.
 
         Parameters
         ----------
         index : torch.tensor
-            The batch of indices to compute the log-probability of.
+            The sample of indices to compute the log-probability of. The
+            rightmost dims must match the `event_shape` of this distribution.
 
         Returns
         -------
         log_prob: torch.tensor
-            The log-probability of each multi-index in the batch.
+            The log-probability of each multi-index in the sample. The shape of
+            the returned tensor is equal to the leftmost dimes of the `value`
+            (rightmost `event_shape` are consumed).
         """
-        assert index.shape[-len(self.event_shape):] == self.event_shape
-        sample_shape = index.shape[:-len(self.event_shape)]
-        index = index.reshape(-1, self.event_shape.numel())
+        index, sample_shape = flatten_event_shape(index, self.event_shape)
 
         return trip_index_log_prob(index, self.cores).reshape(sample_shape)
 
     @torch.no_grad()
     def sample(self, sample_shape):
-        ix, log_p = self.sample_with_log_prob(sample_shape)
-        return ix
+        """Generate a `sample_shape` shaped sample from the categorical."""
+        index, log_p = self.sample_with_log_prob(sample_shape)
+        return index
 
     def rsample(self, sample_shape):
         raise NotImplementedError
 
     def sample_with_log_prob(self, sample_shape):
+        """Generate a `sample_shape` shaped sample from the categorical and
+        return the log-probabilities of the variates in the sample.
+        """
         if not isinstance(sample_shape, torch.Size):
             sample_shape = torch.Size(sample_shape)
 
@@ -233,8 +274,8 @@ def gauss_log_prob(value, loc, log_scale):
 
     Details
     -------
-    Why do people insist on using .pow(2)? `x * x` is generally faster than
-    `x.pow(2)`, because the latter is a general purpose operation.
+    Why do people insist on using .pow(2)? `x * x` is faster than `x.pow(2)`,
+    because the latter is a general purpose operation.
 
     Normal(loc, torch.exp(2 * log_scale)).log_prob(value)
     """
@@ -243,7 +284,41 @@ def gauss_log_prob(value, loc, log_scale):
 
 
 class TRIP(torch.nn.Module):
-    """Tensor Ring Induced Prior by Kuznetsov et al. (2019)
+    r"""Gaussian Tensor Ring Induced Prior by Kuznetsov et al. (2019).
+
+    Parameters
+    ----------
+    shape : tuple
+        Dimensions of the support of the tensor ring categorical distribution.
+
+    ranks : tuple
+        The ranks of the tensor cores used in the Tensor Ring parameterization.
+        **Must** be the same length as `shape`. The higher the rank of each
+        core the richer the dependency structure in the high-dimensional
+        categorical distribution.
+
+    event_shape : tuple, or None
+        The shape of a single draw from this distribution, i.e. the event space
+        within which the support sits. If `None`, then a single variate is a
+        flat index vector of size `len(shape)`. Total number of elements taken
+        by `event_shape` **must** be equal to `len(shape)`.
+
+    Details
+    --------
+    This distribution is a ultra-high-dimensional Mixture of Gaussians with
+    each component being a product of univariate Gaussians with location
+    and scale determined by the component's index. Essentially
+    $$
+    p(z) = \nathbb{E}_{\alpha \sim p(\alpha)}
+        p(z\mid \alpha)
+        \,, $$
+    with independent  $z_k$ conditional on $\alpha$: $
+      p(z\mid \alpha)
+        = \prod_k \mathcal{N}\bigl(
+            z_k \mid \mu_{k \alpha_k}, \sigma^2_{k \alpha_k}
+        \bigr)
+    $ and the component-mixing distribution $p(\alpha)$. For the details on the
+    underlying index distribution refer to `TRCategorical`.
 
     References
     ----------
@@ -275,23 +350,21 @@ class TRIP(torch.nn.Module):
             # scale is initialized to equispaced grid
             self.logscale.data[i, :n].fill_(-1.)
 
-    @property
-    def event_shape(self):
-        # mirror shapes from the index
-        return self.index.event_shape
-
-    @property
-    def shape(self):
-        # mirror shapes from the index
-        return self.index.shape
-
-    @property
-    def cores(self):
-        # expose the trip cores from the index
-        return self.index.cores
-
     def log_prob(self, value):
-        r"""Compute the log-probability of a batch of values w.r.t TRIP.
+        r"""Compute the log-probability density of Gaussian TRIP at `value`.
+
+        Parameters
+        ----------
+        value : torch.tensor
+            The sample of values to compute the log-probability of. The
+            rightmost dims must match the `event_shape` of this distribution.
+
+        Returns
+        -------
+        log_prob: torch.tensor
+            The log-probability of each `event` in the sample. The shape of
+            the returned tensor is equal to the leftmost dimes of the `value`
+            (rightmost `event_shape` are consumed).
 
         Details
         -------
@@ -326,9 +399,7 @@ class TRIP(torch.nn.Module):
             \,. $$
         """
         # XXX semantics `batch_sahpe` maybe?
-        assert value.shape[-len(self.event_shape):] == self.event_shape
-        sample_shape = value.shape[:-len(self.event_shape)]
-        value = value.reshape(-1, self.event_shape.numel())
+        value, sample_shape = flatten_event_shape(value, self.event_shape)
 
         prob, norm = None, None
         for i, core in enumerate(self.index.cores):
@@ -352,21 +423,30 @@ class TRIP(torch.nn.Module):
         return log_prob.reshape(sample_shape)
 
     def rsample_from_index(self, index):
-        """Sample from the chosen mode using the reparameterization.
+        """Draw single variates from the Gaussian modes specified by `index`
+        using location-scale reparameterization trick.
+
+        Parameters
+        ----------
+        index : torch.tensor
+            The sample of indices of the modes to draw single variates from.
 
         Details
         -------
-        Should be used with conjunction with `.index.sample_with_log_prob` or
-        `.index.sample`, e.g.:
+        This method is seldom used alone. Most common use is in conjunction
+        with `.index.sample_with_log_prob` or `.index.sample`, for mixed
+        path-wise and score-function gradients.
 
-        Python::
-            trip = TRIP([11, 11, 11], [3, 3, 3])
-            index, log_prob = trip.index.sample_with_log_prob(n_draws)
-            values = trip.rsample_from_index(index)
+        Example:
+
+            >>> from markovdwp.priors.trip import TRIP
+            >>> trip = TRIP([11, 11, 11], [3, 3, 3])
+            >>> index, log_prob = trip.index.sample_with_log_prob([2, 2])
+            >>> # `log_prob` can be used for REINFORCE
+            >>> values = trip.rsample_from_index(index)
+            >>> # `values` is differentiable
         """
-        assert index.shape[-len(self.event_shape):] == self.event_shape
-        sample_shape = index.shape[:-len(self.event_shape)]
-        index = index.reshape(-1, self.event_shape.numel())
+        index, sample_shape = flatten_event_shape(index, self.event_shape)
 
         # create univariate Gaussians for each row in the index
         rows_ = torch.arange(index.shape[-1], device=self.location.device)
@@ -377,4 +457,22 @@ class TRIP(torch.nn.Module):
 
     @torch.no_grad()
     def sample(self, sample_shape):
+        """Generate a `sample_shape` shaped sample from the Gaussian TRIP."""
         return self.rsample_from_index(self.index.sample(sample_shape))
+
+    # expose read-only properties from the underlying mode distribution
+    @property
+    def cores(self):
+        return self.index.cores
+
+    @property
+    def shape(self):
+        return self.index.shape
+
+    @property
+    def ranks(self):
+        return self.index.ranks
+
+    @property
+    def event_shape(self):
+        return self.index.event_shape
