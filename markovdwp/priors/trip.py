@@ -63,9 +63,10 @@ def trip_index_sample(n_draws, cores, *, generator=None):
 
     # sampling using the "chain"-rule from m down to 1 (in reverse core order)
     # T^m = I, T^k = \prod_{k < s} G^s_{i_s} = G^k_{i_k} T^{k+1}
-    index, tail = [], None
+    index, tail, dims = [], None, [[1, 2], [2, 1]]
     for core, head in zip(cores[::-1], heads[::-1]):
         # `H^k` is `1 x r_1 x r_k`, `T^k` is `n_draws x r_{k+1} x r_1`
+        # `G^k` is `d_k x r_k x r_{k+1}`
         # w_{j i_k} = \tr( T^k_j H^k G^k_{i_k} ) -- prob of `i_k` on chain `j`
         with torch.no_grad():
             # weights `w` are used for sampling and are not backpropped through
@@ -75,15 +76,15 @@ def trip_index_sample(n_draws, cores, *, generator=None):
 
             elif tail is None:
                 # i_m \sim tr( H^m G^m_{i_m}     )
-                w = torch.tensordot(head, core, [[1, 2], [2, 1]])
+                w = torch.tensordot(head, core, dims=dims)
 
             elif head is None:
                 # i_1 \sim tr(     G^1_{i_1} T^1 )
-                w = torch.tensordot(tail, core, [[1, 2], [2, 1]])
+                w = torch.tensordot(tail, core, dims=dims)
 
             else:
                 # i_k \sim tr( H^k G^k_{i_k} T^k )
-                w = torch.tensordot(tail @ head, core, [[2, 1], [1, 2]])
+                w = torch.tensordot(tail, head @ core, dims=dims)
 
         # make sure `w` is `n_draws x d_k` (has effect only if `tail` is None)
         w = w.expand(n_draws, -1)
@@ -432,7 +433,7 @@ class TRIP(torch.nn.Module):
 
             # M^k = \sum_j G^k_j e^{v_{kj} } -- sum-exp primitive would be nice
             # `log_p` is `n_samples x d_k`, `core` is `d_k x r_k x r_{k+1}`
-            margin = torch.tensordot(log_p.exp(), core, [[1], [0]])
+            margin = torch.tensordot(log_p.exp(), core, dims=1)
 
             # P^k_j = \prod_{s \leq k} G^k_{i_{j k}}
             # `prob` is `n_samples x r_1 x r_{k+1}`
