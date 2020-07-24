@@ -4,6 +4,14 @@ import torch
 import torch.nn.functional as F
 
 
+def roll_left(*items, n):
+    """Roll `items` `n` positions to the left so that `n`-th item is at 0"""
+    _, pos = divmod(n, len(items))
+    if pos == 0:
+        return items
+    return items[pos:] + items[:pos]
+
+
 def trip_index_sample(n_draws, cores, *, generator=None):
     r"""Sample from the TR categorical index distribution and get the log-prob.
 
@@ -50,8 +58,10 @@ def trip_index_sample(n_draws, cores, *, generator=None):
       p(\alpha) = \frac{A_\alpha}{Z(A)}
     $.
     """
-    # ToDo: rotate cores, so that the last one has the smallest right dim.
-    # indices must be rotated backward!
+    # Cycle the cores, so that the first one has the _smallest_ left rank dim.
+    ranks = [core.shape[1] for core in cores]
+    shift = min(range(len(ranks)), key=ranks.__getitem__)
+    cores = roll_left(*cores, n=shift)
 
     # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
     heads = [None, cores[0].sum(dim=0, keepdims=True)]
@@ -100,9 +110,12 @@ def trip_index_sample(n_draws, cores, *, generator=None):
         # `ix` is `n_draws x 1`
         index.append(ix)
 
+    # reverse indices and roll back (`reversed` is clearer than [::-1])
+    index = roll_left(*reversed(index), n=-shift)
+
     # the trace of `tail` is the unnormalized prob of the sample
     log_tail = tail.diagonal(dim1=1, dim2=2).sum(dim=1).log()
-    return torch.stack(index[::-1], dim=1), log_tail - norm.trace().log()
+    return torch.stack(index, dim=1), log_tail - norm.trace().log()
 
 
 def trip_index_log_prob(index, cores):
