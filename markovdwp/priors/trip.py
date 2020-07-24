@@ -119,6 +119,38 @@ def trip_index_sample(n_draws, cores, *, generator=None):
     return torch.stack(index, dim=1), log_tail - norm.trace().log()
 
 
+def trip_index_log_marginals(cores):
+    """marginal log-probability of each dimension in the tensor ring categorical
+    distribution.
+    """
+    bars = [core.sum(dim=0) for core in cores]
+
+    heads = [None]
+    for bar in bars[:-1]:
+        heads.append(bar if heads[-1] is None else heads[-1] @ bar)
+
+    tails = [None]
+    for bar in bars[::-1]:
+        tails.append(bar if tails[-1] is None else bar @ tails[-1])
+    norm = tails.pop().trace().log()
+
+    log_p, dims = [], [[1, 2], [1, 0]]
+    for head, core, tail in zip(heads, cores, tails[::-1]):
+        if head is None:
+            # core is `d_1 x r_1 x r_2`, tail `r_2 x r_1`
+            margin = torch.tensordot(core, tail, dims=dims)
+        elif tail is None:
+            # core is `d_m x r_m x r_1`, head `r_1 x r_m`
+            margin = torch.tensordot(core, head, dims=dims)
+        else:
+            # core is `d_k x r_k x r_{k+1}`, head `r_1 x r_k`, tail `r_{k+1} x r_1`
+            margin = torch.tensordot(core, tail @ head, dims=dims)
+
+        log_p.append(margin.log() - norm)
+
+    return log_p
+
+
 def trip_index_log_prob(index, cores):
     """log-probability w.r.t. tensor ring categorical distribution."""
     prob, norm = None, None
@@ -263,7 +295,7 @@ class TRCategorical(torch.nn.Module):
         return [*map(F.softplus, self.log_cores)]
 
     def log_prob(self, index):
-        """The log-probability density/mass w.r.t. the tensor-ring categorical.
+        """The log-probability density/mass w.r.t. the tensor ring categorical.
 
         Parameters
         ----------
@@ -301,6 +333,10 @@ class TRCategorical(torch.nn.Module):
         index, log_p = trip_index_sample(sample_shape.numel(), self.cores)
         index = index.reshape(*sample_shape, *self.event_shape)
         return index, log_p.reshape(sample_shape)
+
+    def log_marginal(self):
+        """The marginal log-probability mass of the tensor ring categorical."""
+        return trip_index_log_marginals(self.cores)
 
 
 def gauss_log_prob(value, loc, log_scale):
