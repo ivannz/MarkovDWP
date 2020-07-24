@@ -67,20 +67,25 @@ def trip_index_sample(n_draws, cores, *, generator=None):
     for core, head in zip(cores[::-1], heads[::-1]):
         # `H^k` is `1 x r_1 x r_k`, `T^k` is `n_draws x r_{k+1} x r_1`
         # w_{j i_k} = \tr( T^k_j H^k G^k_{i_k} ) -- prob of `i_k` on chain `j`
-        if tail is None and head is None:
-            # single-core tensor ring -- just get the trace
-            w = core.diagonal(dim1=1, dim2=2).sum(dim=1).unsqueeze(0)
+        with torch.no_grad():
+            # weights `w` are used for sampling and are not backpropped through
+            if tail is None and head is None:
+                # single-core tensor ring -- just get the trace
+                w = core.diagonal(dim1=1, dim2=2).sum(dim=1).unsqueeze(0)
 
-        elif tail is None:  # i_m \sim \tr( H^m G^m_{i_m} )
-            w = torch.tensordot(head, core, [[1, 2], [2, 1]])
+            elif tail is None:
+                # i_m \sim tr( H^m G^m_{i_m}     )
+                w = torch.tensordot(head, core, [[1, 2], [2, 1]])
 
-        elif head is None:  # i_1 \sim \tr( G^1_{i_1} T^1 )
-            w = torch.tensordot(tail, core, [[1, 2], [2, 1]])
+            elif head is None:
+                # i_1 \sim tr(     G^1_{i_1} T^1 )
+                w = torch.tensordot(tail, core, [[1, 2], [2, 1]])
 
-        else:  # i_k \sim \tr( H^k G^k_{i_k} T^k )
-            w = torch.tensordot(tail @ head, core, [[2, 1], [1, 2]])
+            else:
+                # i_k \sim tr( H^k G^k_{i_k} T^k )
+                w = torch.tensordot(tail @ head, core, [[2, 1], [1, 2]])
 
-        # make sure `w` is `n_draws x d_k` (has effect only if tail is None)
+        # make sure `w` is `n_draws x d_k` (has effect only if `tail` is None)
         w = w.expand(n_draws, -1)
 
         # prob of `i_k` is proportional to `w[.] = tr{head @ core[.] @ tail}`
