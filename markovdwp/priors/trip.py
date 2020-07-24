@@ -64,9 +64,10 @@ def trip_index_sample(n_draws, cores, *, generator=None):
     cores = roll_left(*cores, n=shift)
 
     # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
-    heads = [None, cores[0].sum(dim=0, keepdims=True)]
-    for core in cores[1:]:
-        heads.append(heads[-1] @ core.sum(dim=0, keepdims=True))
+    heads = [None]
+    for core in cores:
+        bar_core = core.sum(dim=0, keepdims=True)
+        heads.append(bar_core if heads[-1] is None else heads[-1] @ bar_core)
 
     # the normalization constant is given by marginalizing all dimensions
     norm = heads.pop().squeeze(0)  # H^{m+1} = \prod_k \bar{G}^k
