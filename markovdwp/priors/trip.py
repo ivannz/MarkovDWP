@@ -12,14 +12,14 @@ def trip_index_sample(n_draws, cores, *, generator=None):
     Consider a positive tensor $A$ in TR-format:
     $$
     A_\alpha
-        = \mathop{tr}\Bigl\{ \prod_k G^{(k)}_{\alpha_k} \Bigr\}
+        = \mathop{tr}\Bigl\{ \prod_k G^k_{\alpha_k} \Bigr\}
         \,, $$
     where $
       \alpha \in \prod_k [d_k]
     $ is a multiindex, $
       [d_k] = 1,\,\cdots,\,d_k
     $ and $
-      G^{(k)} \in \mathbb{R}^{d_k \times r_k \times r_{k+1}}
+      G^k \in \mathbb{R}^{d_k \times r_k \times r_{k+1}}
     $ are positive valued cores the TR format.
 
     Using the cyclic property of the trace and the marginalization based on
@@ -31,56 +31,67 @@ def trip_index_sample(n_draws, cores, *, generator=None):
     $$
     (A \times_k v)_{\alpha_{-k}}
         = \mathop{tr}\biggl\{
-            \Bigl[ \sum_j G^{(k)}_j v_j \Bigr]
+            \Bigl[ \sum_j G^k_j v_j \Bigr]
             \times \underbrace{
-                \Bigl[ \prod_{i > k} G^{(i)}_{\alpha_i} \Bigr]
+                \Bigl[ \prod_{i > k} G^i_{\alpha_i} \Bigr]
             }_{\text{tail}}
             \times \underbrace{
-                \Bigl[ \prod_{i < k} G^{(i)}_{\alpha_i} \Bigr]
+                \Bigl[ \prod_{i < k} G^i_{\alpha_i} \Bigr]
             }_{\text{head}}
         \biggr\}
         \,. $$
+    Let $
+      \bar{G}^k =  \sum_{\alpha_k} G^k_{\alpha_k}
+    $ denote the k-th `collapsed` core. Then the normalization constant is $
+      Z(A)
+        = \sum_\alpha A_\alpha
+        = \mathop{tr}\Bigl\{ \prod_k \bar{G}^k \Bigr\}
+    $, whence $
+      p(\alpha) = \frac{A_\alpha}{Z(A)}
+    $.
     """
-    # H_1 = I, H_k = \prod_{1 \leq s < k} \sum_j G^s_j
+    # ToDo: rotate cores, so that the last one has the smallest right dim.
+    # indices must be rotated backward!
+
+    # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
     heads = [None, cores[0].sum(dim=0, keepdims=True)]
     for core in cores[1:]:
         heads.append(heads[-1] @ core.sum(dim=0, keepdims=True))
 
     # the normalization constant is given by marginalizing all dimensions
-    norm = heads.pop().squeeze(0)
+    norm = heads.pop().squeeze(0)  # H^{m+1} = \prod_k \bar{G}^k
 
     # sampling using the "chain"-rule from m down to 1 (in reverse core order)
-    # i_m \sim \tr( H_m G^m_{i_m}     )
-    # i_k \sim \tr( H_k G^k_{i_k} T_k ), T_k = \prod_{s > k} G^s_{i_s}
-    # i_1 \sim \tr(     G^1_{i_1} T_1 )
+    # T^m = I, T^k = \prod_{k < s} G^s_{i_s} = G^k_{i_k} T^{k+1}
     index, tail = [], None
     for core, head in zip(cores[::-1], heads[::-1]):
-        # `w_k` is the trace of {head @ core_k @ tail}
+        # `H^k` is `1 x r_1 x r_k`, `T^k` is `n_draws x r_{k+1} x r_1`
+        # w_{j i_k} = \tr( T^k_j H^k G^k_{i_k} ) -- prob of `i_k` on chain `j`
         if tail is None and head is None:
-            # `w` is `d_m`
-            w = core.diagonal(dim1=1, dim2=2).sum(dim=1)
-            w = w.unsqueeze(0).expand(n_draws, -1)
+            # single-core tensor ring -- just get the trace
+            w = core.diagonal(dim1=1, dim2=2).sum(dim=1).unsqueeze(0)
 
-        elif tail is None:
-            # `H_m` is `1 x r_1 x r_m`, w_{i_m} = \tr( H_m G^m_{i_m} )
+        elif tail is None:  # i_m \sim \tr( H^m G^m_{i_m} )
             w = torch.tensordot(head, core, [[1, 2], [2, 1]])
-            w = w.expand(n_draws, -1)
 
-        elif head is None:
-            # `T_1` is `n_draws x r_2 x r_1`, w_{i_1} = \tr( G^1_{i_1} T_1 )
+        elif head is None:  # i_1 \sim \tr( G^1_{i_1} T^1 )
             w = torch.tensordot(tail, core, [[1, 2], [2, 1]])
 
-        else:
-            # `H_k` is `1 x r_1 x r_k`, `T_k` is `n_draws x r_{k+1} x r_1`
-            # w_{q i_k} = \tr( H_k G^k_{i_k} T_{kq} ) = \tr( T_{kq} H_k G^k_{i_k} )
+        else:  # i_k \sim \tr( H^k G^k_{i_k} T^k )
             w = torch.tensordot(tail @ head, core, [[2, 1], [1, 2]])
 
-        # sample from the core and update the tail
-        # `w` is `n_draws x d_k`, `ix` is `n_draws x 1`
+        # make sure `w` is `n_draws x d_k` (has effect only if tail is None)
+        w = w.expand(n_draws, -1)
+
+        # prob of `i_k` is proportional to `w[.] = tr{head @ core[.] @ tail}`
+        # differentiability and normalization of `w` not required for sampling
         ix = w.multinomial(1, replacement=True, generator=generator)[:, 0]
 
-        # T_{k-1 q} = G^k_{i_{kq}} T_{k q} is `n_draws x r_k x r_1`
+        # differentiably update the tail
+        # `T^{k-1}_j = G^k_{i_{j k}} T^k_j` is `n_draws x r_k x r_1`
         tail = core[ix] if tail is None else core[ix] @ tail
+
+        # `ix` is `n_draws x 1`
         index.append(ix)
 
     # the trace of `tail` is the unnormalized prob of the sample
@@ -91,13 +102,16 @@ def trip_index_sample(n_draws, cores, *, generator=None):
 def trip_index_log_prob(index, cores):
     """log-probability w.r.t. tensor ring categorical distribution."""
     prob, norm = None, None
-    for i, core in enumerate(cores):
-        # \prod_{s \leq k} G^k_{\alpha_k}
-        margin = core[index[:, i]]
-        prob = margin if prob is None else prob @ margin
-
-        # H_1 = I, H_k = \prod_{1 \leq s < k} \sum_j G^s_j
+    for k, core in enumerate(cores):
+        # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
         norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
+
+        # P^k_j = \prod_{s \leq k} G^k_{i_{j k}}
+        # `margin` is `n_samples x r_k x r_{k+1}`
+        margin = core[index[:, k]]
+
+        # `prob` is `n_samples x r_1 x r_{k+1}`
+        prob = margin if prob is None else prob @ margin
 
     log_prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1).log()
     return log_prob - norm.trace().log()
@@ -153,13 +167,13 @@ class TRCategorical(torch.nn.Module):
     only approximately via the Tensor Ring format:
     $$
     A_\alpha
-        = \mathop{tr}\Bigl\{ \prod_k G^{(k)}_{\alpha_k} \Bigr\}
+        = \mathop{tr}\Bigl\{ \prod_k G^k_{\alpha_k} \Bigr\}
         \,, $$
     with positive-valued cores $
-      G^{(k)} \in \mathbb{R}^{d_k \times r_k \times r_{k+1}}
+      G^k \in \mathbb{R}^{d_k \times r_k \times r_{k+1}}
     $. The higher the ranks $r_k$ the better the approximation of the tensor
     $A$, and thus less constrained the induced categorical distribution. For
-    example, if $r_k = $ then all dimensions in $\Omega$ are independent: $
+    example, if $r_k = 1$ then all dimensions in $\Omega$ are independent: $
       p(\alpha) = \prod_k p(\alpha_k)
     $.
     """
@@ -176,7 +190,7 @@ class TRCategorical(torch.nn.Module):
         self.shape, self.ranks = torch.Size(shape), torch.Size(ranks)
         self.event_shape = event_shape
 
-        # cores `G^{(k)}` are `d_k x r_k x r_{k+1}`, k=1..m
+        # cores `G^k` are `d_k x r_k x r_{k+1}`, k=1..m
         ranks = *ranks, ranks[0]
         self.log_cores = torch.nn.ParameterList([
             torch.nn.Parameter(torch.Tensor(d, r0, r1))
@@ -191,7 +205,7 @@ class TRCategorical(torch.nn.Module):
         Details
         -------
         Since $p_\alpha \propto A_\alpha$, by letting $
-          G^{(k)}_j
+          G^k_j
             = \mathbf{1}_{r_k} \gamma_{k j} \mathbf{1}^\top_{r_{k+1}}
         $, we make sure that $
           A_\alpha = \prod_k r_k \gamma_{k \alpha_k}
@@ -381,7 +395,7 @@ class TRIP(torch.nn.Module):
             = \sum_\alpha p(\alpha) \prod_k p(z_k \mid \alpha)
             = \frac1{Z(A)} \sum_\alpha A_\alpha \prod_k p(z_k \mid \alpha)
             = \frac1{Z(A)} \mathop{tr}\Bigl\{
-                \prod_k \sum_{\alpha_k} G^{(k)}_{\alpha_k} p_k(z_k)_{\alpha_k}
+                \prod_k \sum_{\alpha_k} G^k_{\alpha_k} p_k(z_k)_{\alpha_k}
             \Bigr\}
             = \frac{(A \times_1 p_1(z_1) \cdots \times_m p_m(z_m))}{Z(A)}
             \,, $$
@@ -402,20 +416,22 @@ class TRIP(torch.nn.Module):
         value, sample_shape = flatten_event_shape(value, self.event_shape)
 
         prob, norm = None, None
-        for i, core in enumerate(self.index.cores):
+        for k, core in enumerate(self.index.cores):
+            # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
+            norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
+
             # v_{kj} = \log p_j(z_k | \mu_{kj}, \sigma^2_{kj})
-            loc = self.location[i, :len(core)]
-            logstd = self.logscale[i, :len(core)]
-            log_p = gauss_log_prob(value[:, [i]], loc, logstd)
+            loc = self.location[k, :len(core)]
+            logstd = self.logscale[k, :len(core)]
+            log_p = gauss_log_prob(value[:, [k]], loc, logstd)
 
             # M^k = \sum_j G^k_j e^{v_{kj} } -- sum-exp primitive would be nice
+            # `log_p` is `n_samples x d_k`, `core` is `d_k x r_k x r_{k+1}`
             margin = torch.tensordot(log_p.exp(), core, [[1], [0]])
 
-            # \prod_{s \leq k} M_s
+            # P^k_j = \prod_{s \leq k} G^k_{i_{j k}}
+            # `prob` is `n_samples x r_1 x r_{k+1}`
             prob = margin if prob is None else prob @ margin
-
-            # H_1 = I, H_k = \prod_{1 \leq s < k} \sum_j G^s_j
-            norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
 
         prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1)
         log_prob = torch.clamp(prob, 1e-12).log() - norm.trace().log()
