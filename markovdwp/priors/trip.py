@@ -125,23 +125,30 @@ def trip_index_log_marginals(cores):
     """
     bars = [core.sum(dim=0) for core in cores]
 
+    # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
     heads = [None]
     for bar in bars[:-1]:
         heads.append(bar if heads[-1] is None else heads[-1] @ bar)
 
+    # T^m = I, T^k = \prod_{k < s} \bar{G}^s = \bar{G}^k T^{k+1}
     tails = [None]
-    for bar in bars[::-1]:
+    for bar in bars[::-1]:  # reverse order!
         tails.append(bar if tails[-1] is None else bar @ tails[-1])
-    norm = tails.pop().trace().log()
+
+    # the normalization constant is given by marginalizing all dimensions
+    norm = tails.pop().trace().log()  # T^0 = \prod_k \bar{G}^k
 
     log_p, dims = [], [[1, 2], [1, 0]]
+    # k-th mariginal: w^k_j = \tr( H^k G^k_j T^k )
     for head, core, tail in zip(heads, cores, tails[::-1]):
         if head is None:
             # core is `d_1 x r_1 x r_2`, tail `r_2 x r_1`
             margin = torch.tensordot(core, tail, dims=dims)
+
         elif tail is None:
             # core is `d_m x r_m x r_1`, head `r_1 x r_m`
             margin = torch.tensordot(core, head, dims=dims)
+
         else:
             # core is `d_k x r_k x r_{k+1}`, head `r_1 x r_k`, tail `r_{k+1} x r_1`
             margin = torch.tensordot(core, tail @ head, dims=dims)
