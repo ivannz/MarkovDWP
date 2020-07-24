@@ -74,7 +74,7 @@ def trip_index_sample(n_draws, cores, *, generator=None):
 
     # sampling using the "chain"-rule from m down to 1 (in reverse core order)
     # T^m = I, T^k = \prod_{k < s} G^s_{i_s} = G^k_{i_k} T^{k+1}
-    index, tail, dims = [], None, [[1, 2], [2, 1]]
+    index, tail, dims, scale = [], None, [[1, 2], [2, 1]], []
     for core, head in zip(cores[::-1], heads[::-1]):
         # `H^k` is `1 x r_1 x r_k`, `T^k` is `n_draws x r_{k+1} x r_1`
         # `G^k` is `d_k x r_k x r_{k+1}`
@@ -108,6 +108,10 @@ def trip_index_sample(n_draws, cores, *, generator=None):
         # `T^{k-1}_j = G^k_{i_{j k}} T^k_j` is `n_draws x r_k x r_1`
         tail = core[ix] if tail is None else core[ix] @ tail
 
+        # track stabilizing scales, as `tail` dies for extremely high-dim
+        scale.append(tail.detach().flatten(1, -1).max(1).values)
+        tail = tail / scale[-1].reshape(-1, 1, 1)
+
         # `ix` is `n_draws x 1`
         index.append(ix)
 
@@ -116,7 +120,10 @@ def trip_index_sample(n_draws, cores, *, generator=None):
 
     # the trace of `tail` is the unnormalized prob of the sample
     log_tail = tail.diagonal(dim1=1, dim2=2).sum(dim=1).log()
-    return torch.stack(index, dim=1), log_tail - norm.trace().log()
+
+    # compute the log of the overall stabilizing mutliplier
+    log_scale = sum(map(torch.log, scale))
+    return torch.stack(index, dim=1), log_tail - norm.trace().log() + log_scale
 
 
 def trip_index_log_marginals(cores):
@@ -160,7 +167,7 @@ def trip_index_log_marginals(cores):
 
 def trip_index_log_prob(index, cores):
     """log-probability w.r.t. tensor ring categorical distribution."""
-    prob, norm = None, None
+    prob, norm, scale = None, None, []
     for k, core in enumerate(cores):
         # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
         norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
@@ -172,8 +179,13 @@ def trip_index_log_prob(index, cores):
         # `prob` is `n_samples x r_1 x r_{k+1}`
         prob = margin if prob is None else prob @ margin
 
+        # stabilize
+        scale.append(prob.detach().flatten(1, -1).max(1).values)
+        prob = prob / scale[-1].reshape(-1, 1, 1)
+
+    log_scale = sum(map(torch.log, scale))
     log_prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1).log()
-    return log_prob - norm.trace().log()
+    return log_prob - norm.trace().log() + log_scale
 
 
 def flatten_event_shape(tensor, event_shape, caller=''):
@@ -478,7 +490,7 @@ class TRIP(torch.nn.Module):
         # XXX semantics `batch_sahpe` maybe?
         value, sample_shape = flatten_event_shape(value, self.event_shape)
 
-        prob, norm = None, None
+        prob, norm, scale = None, None, []
         for k, core in enumerate(self.index.cores):
             # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
             norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
@@ -496,8 +508,13 @@ class TRIP(torch.nn.Module):
             # `prob` is `n_samples x r_1 x r_{k+1}`
             prob = margin if prob is None else prob @ margin
 
-        prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1)
-        log_prob = torch.clamp(prob, 1e-12).log() - norm.trace().log()
+            # stabilize
+            scale.append(prob.detach().flatten(1, -1).max(1).values)
+            prob = prob / scale[-1].reshape(-1, 1, 1)
+
+        log_scale = sum(map(torch.log, scale))
+        log_prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1).log()
+        log_prob = log_prob - norm.trace().log() + log_scale
 
         return log_prob.reshape(sample_shape)
 
