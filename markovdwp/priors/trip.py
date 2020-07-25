@@ -490,7 +490,7 @@ class TRIP(torch.nn.Module):
         # XXX semantics `batch_sahpe` maybe?
         value, sample_shape = flatten_event_shape(value, self.event_shape)
 
-        prob, norm, scale = None, None, []
+        prob, norm, scale, maxlogp = None, None, [], []
         for k, core in enumerate(self.index.cores):
             # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
             norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
@@ -501,18 +501,20 @@ class TRIP(torch.nn.Module):
             log_p = gauss_log_prob(value[:, [k]], loc, logstd)
 
             # M^k = \sum_j G^k_j e^{v_{kj} } -- sum-exp primitive would be nice
+            # max-norm as in log-sum-exp for stabilization
+            maxlogp.append(log_p.detach().max(1, keepdims=True).values)
             # `log_p` is `n_samples x d_k`, `core` is `d_k x r_k x r_{k+1}`
-            margin = torch.tensordot(log_p.exp(), core, dims=1)
+            margin = torch.tensordot((log_p - maxlogp[-1]).exp(), core, dims=1)
 
             # P^k_j = \prod_{s \leq k} G^k_{i_{j k}}
             # `prob` is `n_samples x r_1 x r_{k+1}`
             prob = margin if prob is None else prob @ margin
 
-            # stabilize
+            # stabilize running core-density product
             scale.append(prob.detach().flatten(1, -1).max(1).values)
             prob = prob / scale[-1].reshape(-1, 1, 1)
 
-        log_scale = sum(map(torch.log, scale))
+        log_scale = sum(map(torch.log, scale)) + sum(maxlogp).squeeze()
         log_prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1).log()
         log_prob = log_prob - norm.trace().log() + log_scale
 
