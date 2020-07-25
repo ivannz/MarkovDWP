@@ -63,17 +63,23 @@ def trip_index_sample(n_draws, cores, *, generator=None):
     shift = min(range(len(ranks)), key=ranks.__getitem__)
     cores = roll_left(*cores, n=shift)
 
-    # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
-    heads = [None]
+    # LTR-pass: H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
+    heads, scale = [None], []
     for core in cores:
         bar_core = core.sum(dim=0, keepdims=True)
-        heads.append(bar_core if heads[-1] is None else heads[-1] @ bar_core)
+        head = bar_core if heads[-1] is None else heads[-1] @ bar_core
+
+        # heads can be stabilized by their max-norm
+        scale.append(float(head.max()))
+        heads.append(head / scale[-1])
 
     # the normalization constant is given by marginalizing all dimensions
-    norm = heads.pop().squeeze(0)  # H^{m+1} = \prod_k \bar{G}^k
+    # `norm` is H^{m+1} = \prod_k \bar{G}^k
+    log_norm = heads.pop().squeeze(0).trace().log()
+    log_norm_scale = sum(map(math.log, scale))
 
+    # RTL-pass: T^m = I, T^k = \prod_{k < s} G^s_{i_s} = G^k_{i_k} T^{k+1}
     # sampling using the "chain"-rule from m down to 1 (in reverse core order)
-    # T^m = I, T^k = \prod_{k < s} G^s_{i_s} = G^k_{i_k} T^{k+1}
     index, tail, dims, scale = [], None, [[1, 2], [2, 1]], []
     for core, head in zip(cores[::-1], heads[::-1]):
         # `H^k` is `1 x r_1 x r_k`, `T^k` is `n_draws x r_{k+1} x r_1`
@@ -104,26 +110,28 @@ def trip_index_sample(n_draws, cores, *, generator=None):
         # differentiability and normalization of `w` not required for sampling
         ix = w.multinomial(1, replacement=True, generator=generator)[:, 0]
 
+        # `ix` is `n_draws x 1`
+        index.append(ix)
+
         # differentiably update the tail
         # `T^{k-1}_j = G^k_{i_{j k}} T^k_j` is `n_draws x r_k x r_1`
         tail = core[ix] if tail is None else core[ix] @ tail
 
-        # track stabilizing scales, as `tail` dies for extremely high-dim
+        # track stabilizing scales, as `tail` dies off for extremely high-dim
         scale.append(tail.detach().flatten(1, -1).max(1).values)
         tail = tail / scale[-1].reshape(-1, 1, 1)
 
-        # `ix` is `n_draws x 1`
-        index.append(ix)
-
-    # reverse indices and roll back (`reversed` is clearer than [::-1])
-    index = roll_left(*reversed(index), n=-shift)
+    # compute the log of the overall stabilizing mutliplier
+    log_tail_scale = sum(map(torch.log, scale))
 
     # the trace of `tail` is the unnormalized prob of the sample
     log_tail = tail.diagonal(dim1=1, dim2=2).sum(dim=1).log()
 
-    # compute the log of the overall stabilizing mutliplier
-    log_scale = sum(map(torch.log, scale))
-    return torch.stack(index, dim=1), log_tail - norm.trace().log() + log_scale
+    # reverse indices and roll back (`reversed` is clearer than [::-1])
+    index = roll_left(*reversed(index), n=-shift)
+
+    log_scale = log_tail_scale - log_norm_scale
+    return torch.stack(index, dim=1), log_tail - log_norm + log_scale
 
 
 def trip_index_log_marginals(cores):
@@ -132,12 +140,12 @@ def trip_index_log_marginals(cores):
     """
     bars = [core.sum(dim=0) for core in cores]
 
-    # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
+    # LTR-pass: H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
     heads = [None]
     for bar in bars[:-1]:
         heads.append(bar if heads[-1] is None else heads[-1] @ bar)
 
-    # T^m = I, T^k = \prod_{k < s} \bar{G}^s = \bar{G}^k T^{k+1}
+    # RTL-pass: T^m = I, T^k = \prod_{k < s} \bar{G}^s = \bar{G}^k T^{k+1}
     tails = [None]
     for bar in bars[::-1]:  # reverse order!
         tails.append(bar if tails[-1] is None else bar @ tails[-1])
