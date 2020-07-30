@@ -79,7 +79,7 @@ class KernelDataset(Dataset):
 
         full : bool, default=False
             Whether to return full or partial meta information. If `full`
-            is `False`, then on the part related to the specifications of
+            is `False`, then only the part related to the specifications of
             the stored dataset is returned.
 
         Returns
