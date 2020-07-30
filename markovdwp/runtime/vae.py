@@ -160,10 +160,17 @@ class TRIPRuntime(SGVBRuntime):
         # log_p and log_prior are both `self.n_draws x batch`
         log_prior = self.prior.log_prob(sample).mean(dim=0)
 
+        with torch.no_grad():
+            kl_div = [(log_p * log_p.exp()).sum() + log(len(log_p))
+                      for log_p in self.prior.index.log_marginal]
+
+        trip = {f'trip/ix_{i}': kl for i, kl in enumerate(kl_div)}
+
         # the components are 1d with shape `batch`
         return {
             'sgvb/loglik': log_p,
-            'sgvb/kl-div': - q.entropy() - log_prior
+            'sgvb/kl-div': - q.entropy() - log_prior,
+            **trip
         }
 
 
