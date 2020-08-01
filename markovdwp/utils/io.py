@@ -4,24 +4,16 @@ import torch
 
 import tempfile
 
+from functools import partial
+
 
 def load(snapshot):
     with gzip.open(snapshot, 'rb') as fin:
         return torch.load(fin, map_location=torch.device('cpu'))
 
 
-def as_buffer(tensor):
-    # assumes that we can concatenate storage! see unit test
-    with tempfile.NamedTemporaryFile('rb') as fout:
-        # use the temp file as storage for torch tensor
-        storage = tensor.storage().from_file(
-            fout.name, shared=True, size=tensor.numel())
-
-        torch.Tensor(storage).copy_(tensor.flatten())
-        return fout.read()
-
-
-def write_file(tensor, file, *, save_size=False, is_real_file=None):
+def write_file(tensor, file, *, save_size=False, is_real_file=None,
+               chunk_size=1048576):
     """Write tensor storage to a file-like object.
 
     Arguments
@@ -34,6 +26,9 @@ def write_file(tensor, file, *, save_size=False, is_real_file=None):
 
     save_size : bool, default=False
         Whether to write the size of the storage before the binary data.
+
+    chunk_size : int, default=1Mb
+        The buffer size for the the fallback method.
 
     Details
     -------
@@ -62,4 +57,12 @@ def write_file(tensor, file, *, save_size=False, is_real_file=None):
         if isinstance(file, int):
             file = os.fdopen(file)
 
-        file.write(as_buffer(tensor))
+        # assumes that we can concatenate storage! see unit test
+        with tempfile.NamedTemporaryFile('rb') as fout:
+            # use the temp file as storage for torch tensor
+            storage = tensor.storage().from_file(
+                fout.name, shared=True, size=tensor.numel())
+
+            torch.Tensor(storage).copy_(tensor.flatten())
+            for chunk in iter(partial(fout.read, chunk_size), b''):
+                file.write(chunk)

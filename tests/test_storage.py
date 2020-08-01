@@ -4,25 +4,23 @@ import pytest
 
 import torch
 
-from markovdwp.utils.io import as_buffer, write_file
+from markovdwp.utils.io import write_file
 
 
 @pytest.mark.parametrize('n_tensors', [
     1, 10, 100
 ])
 def test_buffer(n_tensors):
-    pairs = []
+    tensors, buf = [], io.BytesIO()
     for _ in range(n_tensors):
-        t = torch.randn(10, 10)
-        pairs.append((t, as_buffer(t)))
-
-    tensors, buffers = zip(*pairs)
+        tensors.append(torch.randn(10, 10, n_tensors))
+        write_file(tensors[-1], buf)
 
     tensor = torch.stack(tensors, dim=0)
 
-    storage = tensor.storage().from_buffer(b''.join(buffers), 'native')
-
+    storage = tensor.storage().from_buffer(buf.getbuffer(), 'native')
     concat = torch.Tensor(storage).reshape_as(tensor)
+
     assert torch.allclose(concat, tensor)
 
 
