@@ -41,7 +41,6 @@ def write_file(tensor, file, *, save_size=False, is_real_file=None,
         * .from_buffer(buf, byte_order=('native', 'little', 'big'), count=-1, offset=0)
         * .from_file(filename, shared=False, size=0)
         * ._write_file(file, is_real_file=False, save_size=False)
-
     """
     if not isinstance(is_real_file, bool):
         try:
@@ -50,6 +49,7 @@ def write_file(tensor, file, *, save_size=False, is_real_file=None,
         except (OSError, AttributeError):
             is_real_file = isinstance(file, int)
 
+    # `save_size` was introduced in the PR #32244 in pytorch
     if save_size or torch.__version__ >= '1.5.1':
         tensor.storage()._write_file(file, is_real_file, save_size)
 
@@ -60,9 +60,11 @@ def write_file(tensor, file, *, save_size=False, is_real_file=None,
         # assumes that we can concatenate storage! see unit test
         with tempfile.NamedTemporaryFile('rb') as fout:
             # use the temp file as storage for torch tensor
+            # shared=True means that the file-storage is immediately updated
             storage = tensor.storage().from_file(
                 fout.name, shared=True, size=tensor.numel())
 
+            # copy source tensor to storage and write it in chunks
             torch.Tensor(storage).copy_(tensor.flatten())
             for chunk in iter(partial(fout.read, chunk_size), b''):
                 file.write(chunk)
