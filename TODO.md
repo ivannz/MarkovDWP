@@ -5,4 +5,4 @@ The list of fixed to do while the experiments are running:
 
 TRIP: forward pass through the sum-reduced cores is not-normalized and suffers from floating point underflow.
 * ~`trip_index_sample`~, ~`TRIP.log_prob`~ and ~`trip_index_log_prob`~ head is not unit-normalized
-* `trip_index_log_marginals` requires careful tracking of max-normalization for the correct renorm of the marginals
+* ~`trip_index_log_marginals` requires careful tracking of max-normalization for the correct renorm of the marginals~

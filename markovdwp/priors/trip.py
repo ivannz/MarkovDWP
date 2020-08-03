@@ -141,21 +141,32 @@ def trip_index_log_marginals(cores):
     bars = [core.sum(dim=0) for core in cores]
 
     # LTR-pass: H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
-    heads = [None]
+    heads = [(None, 0.)]  # track heads' log-sum of max norms
     for bar in bars[:-1]:
-        heads.append(bar if heads[-1] is None else heads[-1] @ bar)
+        last, log_scale = heads[-1]
+
+        head = bar if last is None else last @ bar
+        norm = float(head.max())
+
+        heads.append((head / norm, log_scale + math.log(norm)))
 
     # RTL-pass: T^m = I, T^k = \prod_{k < s} \bar{G}^s = \bar{G}^k T^{k+1}
-    tails = [None]
+    tails = [(None, 0.)]  # track tails' log-sum of max norms
     for bar in bars[::-1]:  # reverse order!
-        tails.append(bar if tails[-1] is None else bar @ tails[-1])
+        last, log_scale = tails[-1]
+
+        tail = bar if last is None else bar @ last
+        norm = float(tail.max())
+
+        tails.append((tail / norm, log_scale + math.log(norm)))
 
     # the normalization constant is given by marginalizing all dimensions
-    norm = tails.pop().trace().log()  # T^0 = \prod_k \bar{G}^k
+    tail, log_norm_scale = tails.pop()
+    norm = tail.trace().log()  # T^0 = \prod_k \bar{G}^k
 
     log_p, dims = [], [[1, 2], [1, 0]]
     # k-th mariginal: w^k_j = \tr( H^k G^k_j T^k )
-    for head, core, tail in zip(heads, cores, tails[::-1]):
+    for (head, log_head), core, (tail, log_tail) in zip(heads, cores, tails[::-1]):
         if head is None:
             # core is `d_1 x r_1 x r_2`, tail `r_2 x r_1`
             margin = torch.tensordot(core, tail, dims=dims)
@@ -168,7 +179,8 @@ def trip_index_log_marginals(cores):
             # core is `d_k x r_k x r_{k+1}`, head `r_1 x r_k`, tail `r_{k+1} x r_1`
             margin = torch.tensordot(core, tail @ head, dims=dims)
 
-        log_p.append(margin.log() - norm)
+        log_scale = log_head + log_tail - log_norm_scale
+        log_p.append(margin.log() - norm + log_scale)
 
     return log_p
 
