@@ -175,10 +175,13 @@ def trip_index_log_marginals(cores):
 
 def trip_index_log_prob(index, cores):
     """log-probability w.r.t. tensor ring categorical distribution."""
-    prob, norm, scale = None, None, []
+    prob, norm, prob_scale, norm_scale = None, None, [], []
     for k, core in enumerate(cores):
         # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
         norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
+
+        norm_scale.append(float(norm.max()))
+        norm = norm / norm_scale[-1]
 
         # P^k_j = \prod_{s \leq k} G^k_{i_{j k}}
         # `margin` is `n_samples x r_k x r_{k+1}`
@@ -188,12 +191,13 @@ def trip_index_log_prob(index, cores):
         prob = margin if prob is None else prob @ margin
 
         # stabilize
-        scale.append(prob.detach().flatten(1, -1).max(1).values)
-        prob = prob / scale[-1].reshape(-1, 1, 1)
+        prob_scale.append(prob.detach().flatten(1, -1).max(1).values)
+        prob = prob / prob_scale[-1].reshape(-1, 1, 1)
 
-    log_scale = sum(map(torch.log, scale))
+    log_norm_scale = sum(map(math.log, norm_scale))
+    log_prob_scale = sum(map(torch.log, prob_scale))
     log_prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1).log()
-    return log_prob - norm.trace().log() + log_scale
+    return log_prob - norm.trace().log() + log_prob_scale - log_norm_scale
 
 
 def flatten_event_shape(tensor, event_shape, caller=''):
@@ -498,10 +502,13 @@ class TRIP(torch.nn.Module):
         # XXX semantics `batch_sahpe` maybe?
         value, sample_shape = flatten_event_shape(value, self.event_shape)
 
-        prob, norm, scale, maxlogp = None, None, [], []
+        prob, norm, prob_scale, maxlogp, norm_scale = None, None, [], [], []
         for k, core in enumerate(self.index.cores):
             # H^1 = I, H^k = \prod_{s < k} \bar{G}^s = H^{k-1} \bar{G}^k
             norm = core.sum(dim=0) if norm is None else norm @ core.sum(dim=0)
+
+            norm_scale.append(float(norm.max()))
+            norm = norm / norm_scale[-1]
 
             # v_{kj} = \log p_j(z_k | \mu_{kj}, \sigma^2_{kj})
             loc = self.location[k, :len(core)]
@@ -519,12 +526,13 @@ class TRIP(torch.nn.Module):
             prob = margin if prob is None else prob @ margin
 
             # stabilize running core-density product
-            scale.append(prob.detach().flatten(1, -1).max(1).values)
-            prob = prob / scale[-1].reshape(-1, 1, 1)
+            prob_scale.append(prob.detach().flatten(1, -1).max(1).values)
+            prob = prob / prob_scale[-1].reshape(-1, 1, 1)
 
-        log_scale = sum(map(torch.log, scale)) + sum(maxlogp).squeeze()
+        log_norm_scale = sum(map(math.log, norm_scale))
+        log_scale = sum(map(torch.log, prob_scale)) + sum(maxlogp).squeeze()
         log_prob = prob.diagonal(dim1=1, dim2=2).sum(dim=1).log()
-        log_prob = log_prob - norm.trace().log() + log_scale
+        log_prob = log_prob - norm.trace().log() + log_scale - log_norm_scale
 
         return log_prob.reshape(sample_shape)
 
