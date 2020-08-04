@@ -1,11 +1,10 @@
 import torch
-import torch.nn.functional as F
-from torch.distributions import Normal, Independent
 
-from torch.nn import Module, Conv2d, ConvTranspose2d
+from torch.nn import Conv2d, ConvTranspose2d
+from .base import BaseDeepIndependentGaussian
 
 
-class Encoder(Module):
+class Encoder(BaseDeepIndependentGaussian):
     """Latent code conditional distribution parameterization for 7x7 convolutions.
 
     Reference
@@ -15,8 +14,7 @@ class Encoder(Module):
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L135
     """
     def __init__(self, x_dim=1, z_dim=2, h_dim=32):
-        super().__init__()
-        self.x_dim, self.z_dim, self.h_dim = x_dim, z_dim, h_dim
+        super().__init__([x_dim, 7, 7], [z_dim, 1, 1])
 
         self.features = torch.nn.Sequential(
             Conv2d(1 * x_dim, 1 * h_dim, 3),
@@ -31,19 +29,10 @@ class Encoder(Module):
             Conv2d(2 * h_dim, 2 * z_dim, 1)
         )
 
-        self.kernel_size = 7, 7
-
-        self.input_shape = x_dim, *self.kernel_size
-        self.event_shape = z_dim, 1, 1
-
-    def forward(self, input):
-        assert input.shape[2:] == self.kernel_size
-
-        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
-        return Independent(Normal(loc, F.softplus(logscale)), 3)
+        self.x_dim, self.z_dim, self.h_dim = x_dim, z_dim, h_dim
 
 
-class Decoder(Module):
+class Decoder(BaseDeepIndependentGaussian):
     """Sample conditional distribution parameterization for 7x7 convolutions.
 
     Reference
@@ -53,8 +42,7 @@ class Decoder(Module):
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L110
     """
     def __init__(self, z_dim=2, x_dim=1, h_dim=32):
-        super().__init__()
-        self.z_dim, self.x_dim, self.h_dim = z_dim, x_dim, h_dim
+        super().__init__([z_dim, 1, 1], [x_dim, 7, 7])
 
         self.features = torch.nn.Sequential(
             ConvTranspose2d(
@@ -73,13 +61,4 @@ class Decoder(Module):
                 1 * h_dim, 2 * x_dim, 1)  # NO conv^\top here
         )
 
-        self.kernel_size = 1, 1
-
-        self.input_shape = z_dim, *self.kernel_size
-        self.event_shape = x_dim, 7, 7
-
-    def forward(self, input):
-        assert input.shape[2:] == self.kernel_size
-
-        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
-        return Independent(Normal(loc, F.softplus(logscale)), 3)
+        self.z_dim, self.x_dim, self.h_dim = z_dim, x_dim, h_dim

@@ -1,11 +1,10 @@
 import torch
-import torch.nn.functional as F
-from torch.distributions import Normal, Independent
 
-from torch.nn import Module, Conv2d, ConvTranspose2d
+from torch.nn import Conv2d, ConvTranspose2d
+from .base import BaseDeepIndependentGaussian
 
 
-class Encoder(Module):
+class Encoder(BaseDeepIndependentGaussian):
     """The distribution of a latent code given a sample.
 
     Reference
@@ -15,8 +14,7 @@ class Encoder(Module):
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L251
     """
     def __init__(self, x_dim=1, z_dim=4, h_dim=64):
-        super().__init__()
-        self.x_dim, self.z_dim, self.h_dim = x_dim, z_dim, h_dim
+        super().__init__([x_dim, 5, 5], [z_dim, 1, 1])
 
         self.features = torch.nn.Sequential(
             Conv2d(1 * x_dim, 1 * h_dim, 3, padding=1),  # don't forget padding
@@ -34,19 +32,10 @@ class Encoder(Module):
             Conv2d(2 * h_dim, 2 * z_dim, 1)  # final layer has twice the z_dim for chunking
         )
 
-        self.kernel_size = 5, 5
-
-        self.input_shape = x_dim, *self.kernel_size
-        self.event_shape = z_dim, 1, 1
-
-    def forward(self, input):
-        assert input.shape[2:] == self.kernel_size
-
-        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
-        return Independent(Normal(loc, F.softplus(logscale)), 3)
+        self.x_dim, self.z_dim, self.h_dim = x_dim, z_dim, h_dim
 
 
-class Decoder(Module):
+class Decoder(BaseDeepIndependentGaussian):
     """The posterior of each sample, given it latent code.
 
     Details
@@ -60,8 +49,7 @@ class Decoder(Module):
     https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L211
     """
     def __init__(self, z_dim=4, x_dim=1, h_dim=64):
-        super().__init__()
-        self.z_dim, self.x_dim, self.h_dim = z_dim, x_dim, h_dim
+        super().__init__([z_dim, 1, 1], [x_dim, 5, 5])
 
         # NB they allow fixing output log_var
         # https://github.com/bayesgroup/deep-weight-prior/blob/master/models/vae.py#L244
@@ -87,13 +75,4 @@ class Decoder(Module):
                 1 * h_dim, 2 * x_dim, 1),  # ... and no Conv^\top here too
         )
 
-        self.kernel_size = 1, 1
-
-        self.input_shape = z_dim, *self.kernel_size
-        self.event_shape = x_dim, 5, 5
-
-    def forward(self, input):
-        assert input.shape[2:] == self.kernel_size
-
-        loc, logscale = torch.chunk(self.features(input), 2, dim=1)
-        return Independent(Normal(loc, F.softplus(logscale)), 3)
+        self.z_dim, self.x_dim, self.h_dim = z_dim, x_dim, h_dim
