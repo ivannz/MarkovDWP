@@ -4,8 +4,6 @@ import torch
 
 import tempfile
 
-from functools import partial
-
 
 def load(snapshot):
     with gzip.open(snapshot, 'rb') as fin:
@@ -66,5 +64,5 @@ def write_file(tensor, file, *, save_size=False, is_real_file=None,
 
             # copy source tensor to storage and write it in chunks
             torch.Tensor(storage).copy_(tensor.flatten())
-            for chunk in iter(partial(fout.read, chunk_size), b''):
+            for chunk in iter(lambda: fout.read(chunk_size), b''):
                 file.write(chunk)
