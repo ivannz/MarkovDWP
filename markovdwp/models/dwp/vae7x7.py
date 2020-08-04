@@ -32,6 +32,8 @@ class Encoder(Module):
         )
 
         self.kernel_size = 7, 7
+
+        self.input_shape = x_dim, *self.kernel_size
         self.event_shape = z_dim, 1, 1
 
     def forward(self, input):
@@ -72,6 +74,8 @@ class Decoder(Module):
         )
 
         self.kernel_size = 1, 1
+
+        self.input_shape = z_dim, *self.kernel_size
         self.event_shape = x_dim, 7, 7
 
     def forward(self, input):
