@@ -125,7 +125,7 @@ class ImplicitSlicePrior(ImplicitPrior):
         self.register_buffer('nilone', torch.tensor([0., 1.]))
 
     def penalty_q(self, q, n_draws_q=1, n_draws_r=1):
-        """Penalty for a factorized `q`. `pi` is Std Gaussian.
+        r"""Penalty for a factorized `q`. `pi` is Std Gaussian.
 
         Parameters
         ----------
@@ -139,6 +139,18 @@ class ImplicitSlicePrior(ImplicitPrior):
 
         If `encoder` is not a `nn.Module`, then assumes that `r(h|w)` has
         collapsed to `pi(h)`, which is batch-factorized and uses it instead.
+
+        The penalty term for the implicit prior $
+          \hat{p}(w) = \mathbb{E}_{z \sim \pi(z)} p(w|z)
+        $ is estimated by a differentiable Monte Carlo estimator via
+        reparameterization thus:
+        1. diff. sample $w_j \sim q(w)$ (treat batch is implicit)
+        2. put $r_j(z) = r(z|w_j)$ and diff. sample $z_{kj} \sim r_j(z)$
+        3. put $p_{kj}(w) = p(w|z_{kj})$ and compute $
+          - H(q)
+          + \frac1{J} \sum_j KL(r_j(z)\| \pi(z))
+          - \frac1{J K} \sum_{j k} \log p(w_j|z_{kj})
+        $
         """
         # independently draw a batch of slices ~ `q`
         # w has shape `n_draws_q x *q.batch_shape x *q.event_shape`
