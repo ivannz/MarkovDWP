@@ -45,18 +45,28 @@ def test_write_file():
     assert torch.allclose(recon, tensor)
 
     # 3. test file buffer, forget to flush
-    with pytest.raises(RuntimeError):
-        with tempfile.NamedTemporaryFile() as file:
-            write_file(tensor, file, save_size=False)
+    with tempfile.NamedTemporaryFile() as file:
+        file.write(bytes(range(64)))
 
-            # file.flush()
-
+        # file.flush()
+        with pytest.raises(RuntimeError):
             assert torch.allclose(torch.Tensor(tensor.storage().from_file(
                 file.name, False, tensor.numel())), tensor)
 
-    # 4. test file buffer
+        file.flush()
+        with pytest.raises(AssertionError):
+            assert torch.allclose(torch.Tensor(tensor.storage().from_file(
+                file.name, False, tensor.numel())), tensor)
+
+    # 4. test file buffer, but first forget to flush
     with tempfile.NamedTemporaryFile() as file:
-        write_file(tensor, file, save_size=False)
+        # force python file object interface
+        write_file(tensor, file, save_size=False, is_real_file=False)
+
+        # file.flush()
+        with pytest.raises(RuntimeError):
+            assert torch.allclose(torch.Tensor(tensor.storage().from_file(
+                file.name, False, tensor.numel())), tensor)
 
         file.flush()
 
