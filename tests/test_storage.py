@@ -72,3 +72,31 @@ def test_write_file():
 
         assert torch.allclose(torch.Tensor(tensor.storage().from_file(
             file.name, False, tensor.numel())), tensor)
+
+
+@pytest.mark.parametrize('n_tensors', [
+    1, 10, 100
+])
+@pytest.mark.parametrize('shape', [
+    [7, 3, 5],
+    [17],
+])
+def test_storage_concat(n_tensors, shape):
+    # test appending to a file
+    with tempfile.NamedTemporaryFile('wb') as file:
+        tensors = []
+        for _ in range(n_tensors):
+            tensors.append(torch.randn(*shape))
+            write_file(tensors[-1], file)
+
+        shape = torch.Size([len(tensors), *tensors[-1].shape])
+        dtype = tensors[-1].dtype
+
+        file.flush()
+
+        # rebuild the tensor from binary data
+        storage_type = torch.tensor([], dtype=dtype).storage()
+        storage = storage_type.from_file(file.name, False, shape.numel())
+        stored = torch.Tensor(storage).reshape(shape)
+
+        assert torch.allclose(stored, torch.stack(tensors, dim=0))
