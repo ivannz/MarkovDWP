@@ -139,7 +139,7 @@ class KernelDataset(Dataset):
 
         # drop `events` with small ell-2 norm
         norms = self.tensor.norm(dim=event_dim, p=2)
-        self.indices = (norms >= min_norm).nonzero()
+        self.indices = (norms >= min_norm).nonzero(as_tuple=False)
 
         # figure out the label associated to this source
         labels = {k: i for i, k in enumerate(self.meta['dataset'])}
@@ -299,9 +299,10 @@ class LabelledKernelDataset(KernelDataset):
 
             # drop `events` with small ell-2 norm
             norms = tensor.norm(dim=self.event_dim, p=2)
+            index = (norms >= self.min_norm[source]).nonzero(as_tuple=False)
 
             tensors.append(tensor)
-            indices.append((norms >= self.min_norm[source]).nonzero())
+            indices.append(index)
             indptr.append(indptr[-1] + len(indices[-1]))
 
         # index to source interval mapping in split key-val form
