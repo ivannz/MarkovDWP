@@ -4,6 +4,7 @@ from torch.nn import Linear, Conv2d, BatchNorm1d, BatchNorm2d
 from torch.nn import LeakyReLU, MaxPool2d, Flatten, Sequential
 
 from cplxmodule.nn.relevance import Conv2dVD
+from ..nn.gaussian import Conv2dGaussian
 
 
 class CIFARNetFeatures:
@@ -85,5 +86,9 @@ class CIFARNet:
         ]))
 
 
-class BayesCIFARNet(CIFARNet):
+class BayesCIFARNetVD(CIFARNet):
     Linear, Conv2d = Linear, Conv2dVD
+
+
+class BayesCIFARNetGaussian(CIFARNet):
+    Linear, Conv2d = Linear, Conv2dGaussian
