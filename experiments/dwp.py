@@ -112,7 +112,7 @@ def train(gpus, config, logger=None):
 
 
 def main(manifest, target=None, gpus=[0], debug=False, tags=None,
-         priors='fixed', init='default'):
+         priors=None, init=None):
     breakpoint() if debug else None
 
     assert tags is None or isinstance(tags, str)
@@ -122,20 +122,24 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None,
     parameters = json.load(open(manifest, 'rt'))
 
     # process priors and init fast args
-    assert priors in ('collapsed', 'fixed', 'trainable')
-    config = parameters['options']['priors']
-    for name, prior in config.items():
-        if isinstance(prior, dict):
-            prior['kind'] = priors
+    if priors is not None:
+        assert priors in ('collapsed', 'fixed', 'trainable')
+        config = parameters['options']['priors']
+        for name, prior in config.items():
+            if isinstance(prior, dict):
+                prior['kind'] = priors
 
-    # try opening the kernel dataset and
-    config = parameters['options']['init']
-    if init not in ('default', 'prior'):
-        missing = config.keys() - KernelDataset.info(init).keys()
-        if missing:
-            raise ValueError(f'Cannot find source '
-                             f'distribution for `{missing}`.')
-        init = {'root': init}
+    # try opening the kernel dataset and then override the settings
+    if init is not None:
+        config = parameters['options']['init']
+        if init not in ('default', 'prior'):
+            missing = config.keys() - KernelDataset.info(init).keys()
+            if missing:
+                raise ValueError(f'Cannot find source '
+                                 f'distribution for `{missing}`.')
+            init = {'root': os.path.normpath(os.path.abspath(init))}
+
+        parameters['options']['init'] = dict.fromkeys(config, init)
 
     # config is ready!
     if target is None:
@@ -211,18 +215,18 @@ if __name__ == '__main__':
         help='Enter trace mode.')
 
     parser.add_argument(
-        '--init', type=str, required=False, default='default',
+        '--init', type=str, required=False, default=None,
         help='Specify how the network is initialized: `default`, '
              '`prior`, or a path to a compatible kernel dataset.')
 
     parser.add_argument(
-        '--priors', type=str, required=False, default='fixed',
+        '--priors', type=str, required=False, default=None,
         help='Specify whether priors are `trainable`, `fixed`, '
              'or `collapsed` to Standard Factorized Gaussian.')
 
     parser.set_defaults(
-        target=None, gpus=[0], init='default',
-        priors='fixed', tags=None, debug=False)
+        target=None, gpus=[0], init=None,
+        priors=None, tags=None, debug=False)
 
     args, _ = parser.parse_known_args()
     main(**vars(args))
