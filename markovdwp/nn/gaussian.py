@@ -23,7 +23,7 @@ class BasePenalizedGaussian(FreezableWeightBase, BaseARD):
                     \sigma^2_{ij} + \mu_{ij}^2
                     - \log \sigma^2_{ij} - 1
                 \bigr)
-            \. $$
+            \,. $$
         """
         kl = self.weight * self.weight + torch.exp(self.log_sigma2)
         return 0.5 * (kl - self.log_sigma2 - 1)
