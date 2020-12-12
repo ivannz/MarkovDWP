@@ -12,17 +12,20 @@ parameters:
   manifest: # base experiment manifest
     value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/configs/dwp.json'
   priors:
-    values: ['fixed', 'trainable']  # values: ['collapsed', 'fixed', 'trainable']
+    # values: ['fixed', 'trainable']
+    values: ['collapsed', 'fixed', 'trainable']
   init:
     values: ['default', 'prior', '/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/']
   dataset__train__train_size:
-    values: [50, 100, 150, 250, 400, 650, 1050, 1700, 2750, 4450, 7200, 11650]  # fib [50, 100] n, m = m, n+m
+    # fib [50, 100] n, m = m, n+m, mixed with Atanov's milestones
+    values: [50, 100, 150, 200, 250, 400, 500, 650, 1000, 1050, 1700, 2750, 4450, 7200, 11650]
   options__coef__model.kl_div:
     value: 'dataset'
   options__lr:
     value: 1e-3
   options__kind:
     value: 'implicit'  # values: ['classic', 'implicit']
+  model__cls:
+    value: "<class 'markovdwp.models.cifar.BayesCIFARNetGaussian'>"
   order:
     values: [0, 1]
-
