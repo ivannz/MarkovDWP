@@ -142,6 +142,11 @@ class BaseDWPRuntime(BaseRuntime):
         # shadow list to register priors with `torch.nn.Module`
         self._priors = torch.nn.ModuleList(self.priors.values())
 
+        # disable grads if we use non-implicit priors (implit are likely
+        #  used just for init).
+        if self.kind != 'implicit':
+            self._priors.requires_grad_(False)
+
     def on_train_start(self):
         # we are on device, so re-init model here
         init(self.core, self.priors, self.init, prefix='')
