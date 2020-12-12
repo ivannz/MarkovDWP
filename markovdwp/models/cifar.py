@@ -90,5 +90,9 @@ class BayesCIFARNetVD(CIFARNet):
     Linear, Conv2d = Linear, Conv2dVD
 
 
+class BayesCIFARNet(BayesCIFARNetVD):
+    pass
+
+
 class BayesCIFARNetGaussian(CIFARNet):
     Linear, Conv2d = Linear, Conv2dGaussian
