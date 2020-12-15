@@ -33,7 +33,7 @@ class ImplicitPrior(torch.nn.Module):
         raise NotImplementedError
 
 
-def to_q(mod, dim=0):
+def to_q(mod, dim=0, CHUNK_SIZE=128):
     """Var approx distribution generator for a convolutional layer."""
     assert isinstance(mod, ConvNdGaussianMixin)
 
@@ -65,7 +65,18 @@ def to_q(mod, dim=0):
         mean, log_var = mean.unsqueeze(-dim), log_var.unsqueeze(-dim)
         return Independent(Normal(mean, torch.exp(log_var / 2)), dim)
 
-    if dim == 2:
+    if dim == 'chunk':
+        # flatten the in-out channel dims
+        means = mod.weight.flatten(0, 1)
+        logvars = mod.log_sigma2.flatten(0, 1)
+
+        # torch.chunk creates views, so memory if preserved here
+        mean_chunks = torch.split(means, CHUNK_SIZE, dim=0)
+        logvar_chunks = torch.split(logvars, CHUNK_SIZE, dim=0)
+
+        yield from starmap(q, zip(mean_chunks, logvar_chunks))
+
+    elif dim == 2:
         yield from starmap(q, zip(mod.weight.flatten(0, 1),
                                   mod.log_sigma2.flatten(0, 1)))
 
