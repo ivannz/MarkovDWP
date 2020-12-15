@@ -70,7 +70,8 @@ def to_q(mod, dim=0, CHUNK_SIZE=128):
         means = mod.weight.flatten(0, 1)
         logvars = mod.log_sigma2.flatten(0, 1)
 
-        # torch.chunk creates views, so memory if preserved here
+        # `.split` (`.chunk`) creates views, so memory is
+        # conserved and grads pass through.
         mean_chunks = torch.split(means, CHUNK_SIZE, dim=0)
         logvar_chunks = torch.split(logvars, CHUNK_SIZE, dim=0)
 
