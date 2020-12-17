@@ -118,6 +118,8 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None,
     assert tags is None or isinstance(tags, str)
     tags = tags.split(',') if tags is not None else []
 
+    priors = None if priors == 'None' else priors  # wandb passes as str
+
     # the manifest must be complete and ready to go
     parameters = json.load(open(manifest, 'rt'))
 
