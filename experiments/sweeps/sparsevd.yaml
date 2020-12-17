@@ -1,0 +1,30 @@
+project: 'DWP Slice Replication Machine'
+description: 'Run many experiments for the DWP cifar replication'
+
+program: dwp.py
+method: grid
+
+parameters:
+  tags:
+    value: 'no-dwp, Slices DWP, Fib Size'
+  target:
+    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/snapshots/'
+  manifest: # base experiment manifest
+    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/configs/dwp.json'
+  priors:
+    value: null
+  init:
+    values: ['default', 'prior', '/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/']
+  dataset__train__train_size:
+    # fib [50, 100] n, m = m, n+m, mixed with Atanov's milestones
+    values: [50, 100, 150, 200, 250, 400, 500, 650, 1000, 1050, 1700, 2750, 4450, 7200, 11650]
+  options__coef__model.kl_div:
+    value: 'dataset'
+  options__lr:
+    value: 1e-3
+  options__kind:
+    value: 'classic'
+  model__cls:
+    value: "<class 'markovdwp.models.cifar.BayesCIFARNetVD'>"
+  order:
+    values: [0, 1]
