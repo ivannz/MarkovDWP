@@ -4,23 +4,236 @@ The reviews of the Deep Weight Prior, proposed by [Atanov et al. (2019)](https:/
 
 In this project we set out to find a solution, a hierarchical model, that would enable generation of interdependent slices for the filter bank of a single convolutional layer. Having achieved a substantial result, we could explore further tentative directions: generative model for entire layers, progressive growth of neural networks in architecture search.
 
+## Installation
 
-## Developers
+The base stack is `python>=3.8`, `torch>=1.5` as the backend, `wandb` for reporting and `pytorch-lighting` as the framework.
 
-Please install the cloned repo in editable mode for easier deployment:
-
+For example, you can setup the following *conda* environment
 ```bash
-git clone https://github.com/ivannz/MarkovDWP.git
-cd MarkovDWP
+conda create -n pysandbox "python>=3.7" pip cython numpy mkl numba scipy scikit-learn \
+jupyter ipython pytest "conda-forge::compilers>=1.0.4" conda-forge::llvm-openmp \
+matplotlib pytorch::pytorch pytorch::torchvision pytorch::torchaudio "cudatoolkit=10.2"
+```
+
+To install unzip or clone the repository of the package
+```bash
+unzip MarkovDWP-master.zip
+# git clone https://github.com/ivannz/MarkovDWP.git MarkovDWP
+
+# local module installation
+cd ./MarkovDWP-master
 pip install -e .
 ```
 
-The base stack will be `python>=3.8`, `torch>=1.4` and `pytorch-lighting` as the framework.
+Run the following to see if the package has been installed properly
+```bash
+cd ./MarkovDWP-master
+
+# download cifar10/100 datasets and validate the pipeline
+CUDA_VISIBLE_DEVICES=0 python -m markovdwp.source ./experiments/configs/prepare-cifar10.json
+CUDA_VISIBLE_DEVICES=0 python -m markovdwp.source ./experiments/configs/prepare-cifar100.json
+```
+
+## Brief overview of the MarkovDWP package
+
+The package implements prior distributions, convolutional networks, ELBO and IWAE objectives, and training and logging methods automated experimentation pipeline. The objective of the package is replicate the original DWP paper and to provide reusable implementations of key objects: `ImplcitPrior`, `TensoRingPrior`, `KernelDataset` and etc.
 
 The repo has the following structure:
-* `markovdwp` -- the package with method implementations and the core experimentation backend.
-* `experiments` -- the directory where experiments will be designed and their prototypes kept.
+* `data` -- the folder where the data is expected to reside by default
+* `experiments` -- the directory where experiments are designed and their prototypes kept
+* `markovdwp` -- the package with method implementations and the core experimentation backend
+* `scripts` -- the bash scripts that facilitate automated experiments
 
+
+## Large scale experiments
+
+The package provides interface for large scale automated experiments. To achieve this it was necessary to automate model, dataset and other object creation and allow to re-specify them without human intervention between experiments.
+
+### The `class-spec` dictionary
+
+The core object definition unit in the configuration JSON is the `class spec` dictionary. It is responsible for instantiation and enables on-the-fly replacement of objects. For example, it enables easier grid search over implemented models, datasets, or other objects. The class spec is a dictionary with a required key `cls`, which specified the [qualified name](https://www.python.org/dev/peps/pep-3155/#id6) of the desired object represented in the form of a string with format:
+> `"<class 'python.path.to.MyObjectClass'>`
+
+For example, the following class-spec represents a linear layers with 16 input and 32
+output neurons without bias term:
+```python
+class_spec = {
+    'cls': "<class 'torch.nn.modules.linear.Linear'>",
+    'in_features': 16,
+    'out_features': 32,
+    'bias': False
+}
+```
+Internally class-specs are resolved into object instances via the following
+```python
+from markovdwp.utils.runtime import get_instance
+
+# get instance from the class-spec
+layer = get_instance(**class_spec)
+print(layer)
+# >>> Linear(in_features=16, out_features=32, bias=False)
+```
+The higher-level logic is
+1. use `importlib` to find and import the object specified in the mandatory field `cls`
+2. construct the located object with the keyword arguments taked from all fields of the class-spec other than `cls`.
+
+To build class-specs of new objects one can do:
+```python
+import torch
+
+# A qualified name lets you re-import the exact same object
+print(str(torch.nn.Conv2d))
+# >>> <class 'torch.nn.modules.conv.Conv2d'>
+
+class_spec = {
+    'cls': str(torch.nn.Conv2d),
+    'in_features': 16,
+    'out_features': 32,
+    'bias': False
+}
+```
+
+
+#### partial class-spec
+
+Partial class-spec is just the string which would have been under the `cls` field of the full class-spec. This format enables to split class from parameters and is used in `experiments/vae.py`, but rarely elsewhere.
+
+### Specification of experiments
+
+Every experiment is defined through a `manifest`, which is a `JSON` file with a special structure, that specifies the model, its parameters, the dataset, the dataloaders, the training procedure and the applied method.
+
+The JSON has the following mandatory fields:
+* `dataset` -- specifies the datasets used in the training procedure
+* `feeds` -- specified the parameters of the dataloaders used to randomly draw batches from the specified dataset
+* `trainer` -- parameters of the training loop, e.g. `max number of epochs`, `gradient clipping`, `validation frequency`, etc.
+* `options` -- parameters of the gradient descent training, e.g. the `learning rate`, and coefficients in the objective function, which is to be minimized
+
+Each particular kind of experiment may require additional fields. For example, the `model` field, which keeps the specification of the model that is to be trained, is not used by `experiments/vae.py`
+* `model` is a class-spec dictionary of the model used for training
+
+#### dataset
+
+`datasets` is dictionary of class-specs, each key of which specifies a dataset. The key becomes the name assigned to the dataset.
+
+The following piece specifies the CIFAR100 Train split dataset downloaded to `./data/` with `full` augmentation (random crop and horizontal flip) under the name `train`
+```json
+{
+    "dataset": {
+        // general pattern of specifying datasets
+        // "internal-name-of-the-dataset": CLASS_SPEC,
+
+        // `train` dataset specification, see the class for parameter docs
+        "train": {
+            "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR100_Train'>",
+            "root": "./data/",
+            "augmentation": "full",
+            "train_size": null,
+            "random_state": null
+        },
+        ...
+    }
+}
+```
+
+#### feeds
+
+Like `dataset`, `feeds` is also a dict of class-specs, except that each key **must** correspond to a dataset in `datasets`.
+
+The following specifies a dataloader (also called `feed`) with batch size 256 and randomly pre-shuffled for the `train` dataset under the same name:
+```json
+{
+    "feeds": {
+        // general pattern of specifying feed 
+        "<name-in-datasets>": CLASS_SPEC,
+
+        "train": {
+            "batch_size": 256,
+            "shuffle": true,
+            "pin_memory": true,
+            "num_workers": 6
+        }
+    }
+}
+```
+
+#### trainer
+
+`trainer` is a dictionary of parameters, which specify the higher level parameters of the trainer `pytorch_lightning.Trainer`:
+
+```json
+{
+    "trainer": {
+        "max_epochs": 300,
+        "track_grad_norm": 1.0,
+        "val_check_interval": 1.0,
+        "resume_from_checkpoint": null
+    }
+}
+```
+
+#### options
+
+`options` is a dictionary of finer parameters of the experiment, such as specification of the applied method, the learning rate or coefficients in the regularization terms of the objective function:
+
+```json
+{
+    "options": {
+        "lr": 0.001,
+            "coef": {
+                "task.nll": 1.0,
+                "model.l2_norm.features": 0.0001,
+                "model.l2_norm.classifier": 0.0
+            }
+        }
+    }
+}
+```
+
+### Additional fields, specifc to `experiments/vae.py`
+
+#### resampling (optional)
+`resampling` the resampling strategy applied to the dataset, which is applied after the datasets are retrieved, but before the batch feeds are created. As such it facilitates renaming of the datasets and defining different subsamples thereof. The following example undersamples the `train` dataset and stores it under the same name, then independently creates its copy of under a new name `train_copy` (before undersampling), and creates a `reference` dataset, that is a deterministic random subset of the `test`.
+
+```json
+{
+    "resampling": {
+        "train": {
+            "source": "train",
+            "kind": "undersample",
+            "size": null,
+            "random_state": null
+        },
+        "train_copy": "train",
+        "reference": {
+            "source": "test",
+            "kind": "subset",
+            "size": 256,
+            "random_state": 1381736037
+        },
+        ...
+    }
+}
+```
+
+#### runtime
+`runtime` this is a partial class-spec, that specifies the training paradigm of the Vartiational Autoencoder. May specify any class, but only the following are implemented:
+* `"<class 'markovdwp.runtime.vae.SGVBRuntime'>"` SGVB method of [Kingma and Welling (2014)](https://openreview.net/forum?id=33X9fd2-9FyZd)
+* `"<class 'markovdwp.runtime.vae.IWAERuntime'>"` IWAE method of [Burda et al. (2016)](https://openreview.net/forum?id=RFZ6gFAik9K)
+* `"<class 'markovdwp.runtime.vae.TRIPRuntime'>"` Maxlmum Likelihood for
+Tensor Ring Induced Prior of [Kuznetsov et al. (2019)](http://papers.nips.cc/paper/8664-a-prior-of-a-googol-gaussians-a-tensor-ring-induced-prior-for-generative-models.pdf)
+
+#### vae
+`vae` is the field used in place of `model` in the VAE experiemnts. Has the following structure:
+```json
+{
+    "vae": {
+        "encoder": CLASS_SPEC,
+        "decoder": CLASS_SPEC,
+        "options": {...}
+    }
+}
+```
+`encoder` and `decoder` fields contain the class specs of the Encoder and the Decoder, respectively. `options` field allows non-redundant specification of shared parameters for both models. 
 
 # References
 
