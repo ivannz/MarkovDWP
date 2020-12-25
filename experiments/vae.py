@@ -146,7 +146,7 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None):
 
     if target is None:
         # do not save anything
-        warnings.warn('No target path specified, the model will not be saved'.
+        warnings.warn('No target path specified, the model will not be saved',
                       NoTargetWarning)
 
     elif os.path.isdir(target):

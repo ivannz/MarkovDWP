@@ -139,7 +139,7 @@ def main(manifest, target=None, gpus=[3], tag=None, seed=None, debug=False):
     # save under a random name if target is a directory
     if target is None:
         # do not save anything
-        warnings.warn('No target path specified, the model will not be saved'.
+        warnings.warn('No target path specified, the model will not be saved',
                       NoTargetWarning)
 
     elif os.path.isdir(target):
