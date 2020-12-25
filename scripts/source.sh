@@ -2,12 +2,12 @@
 #
 # Train some number of source models on each device.
 #
-# $ ./sourcerer.sh `N` `manifset` `target` `tag` `gpu` `[* gpu]`
+# $ ./source.sh `N` `manifset` `target` `tag` `gpu` `[* gpu]`
 #
 #  Launches source dataset acquisition scripts in parallel bash
 #   subprocesses one per device in `gpus`
 #
-#  see `./source.sh` for details
+#  see `./_source.sh` for details
 
 n_repl="${1}"; shift
 manifest="${1}"; shift
