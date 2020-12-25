@@ -1,18 +1,17 @@
-project: 'DWP Slice Replication Machine'
+project: 'DWP Grid Search Machine'
 description: 'Run many experiments for the DWP cifar replication'
 
-program: dwp.py
+program: experiments/dwp.py
 method: grid
 
 parameters:
   tags:
     value: 'dwp, Slices DWP, Fib Size'
   target:
-    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/snapshots/'
+    value: './experiments/snapshots/'
   manifest: # base experiment manifest
-    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/configs/dwp.json'
+    value: './experiments/configs/dwp.json'
   priors:
-    # values: ['fixed', 'trainable']
     values: ['collapsed', 'fixed', 'trainable']
   init:
     values: ['default', 'prior', '/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/']
