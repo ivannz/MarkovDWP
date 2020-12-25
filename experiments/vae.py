@@ -3,6 +3,7 @@ import json
 import gzip
 import time
 import tempfile
+import warnings
 
 import torch
 
@@ -21,6 +22,10 @@ from markovdwp.utils.runtime import register, get_class, get_instance
 
 from pytorch_lightning.loggers import WandbLogger
 from markovdwp.utils.vendor.pytorch_lightning import GradInformation
+
+
+class NoTargetWarning(UserWarning):
+    pass
 
 
 def get_vae(encoder, decoder, options):
@@ -141,7 +146,8 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None):
 
     if target is None:
         # do not save anything
-        pass
+        warnings.warn('No target path specified, the model will not be saved'.
+                      NoTargetWarning)
 
     elif os.path.isdir(target):
         # consume the first tag

@@ -3,6 +3,7 @@ import json
 import gzip
 import time
 import tempfile
+import warnings
 
 import torch
 
@@ -23,6 +24,10 @@ from markovdwp.utils.runtime import get_datasets, get_dataloaders
 
 from markovdwp.utils.dicttools import flatten, unflatten, override
 from markovdwp.utils.vendor.pytorch_lightning import GradInformation
+
+
+class NoTargetWarning(UserWarning):
+    pass
 
 
 def sparsity(module, threshold=-0.5, prefix=''):
@@ -146,7 +151,8 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None,
     # config is ready!
     if target is None:
         # do not save anything
-        pass
+        warnings.warn('No target path specified, the model will not be saved'.
+                      NoTargetWarning)
 
     elif os.path.isdir(target):
         # consume the first tag
