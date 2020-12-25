@@ -12,11 +12,14 @@
 #  see `python -m markovdwp.source --help` for other details.
 
 n_repl="${1}"; shift
+manifest="${1}"; shift
+target="${1}"; shift
 
 for ((i=1;i<=n_repl;i++)); do
     # tag="run-$(printf '%02d' ${i})"
 
     # `ampersand` forks into a parallel bash process
     # redirect stdout to the individual file
-    python -m markovdwp.source $@ --seed deterministic > /dev/null
+    python -m markovdwp.source "${manifest}" --target "${target}" $@ \
+        --seed deterministic > /dev/null
 done
