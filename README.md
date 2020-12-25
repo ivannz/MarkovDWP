@@ -305,7 +305,7 @@ This automatically creates a folder next to `./data/cifar100-models` with the na
 The JSON file contains important meta information on the collected dataset:
 * the shape, data type and storage of convolutions from a specific layer of the common model's architecture
 * paths to snapshots of the trained models in exactly the same order as the convolution kernels in each layer
-* the experiment manifest uset to train all models
+* the experiment manifest used to train all models
 
 The following piece specifies a kernel dataset of a **7x7** convolution layer `features.conv0` (key) with **3 input** and **128 output** channels collected from **100 models** (`shape` field). The tensor of type **float32** (`dtype` field) is stored in flat file format in *opaquely named binary file* **vqbxr3rlb.bin** (`vault` field).
 ```json
@@ -359,6 +359,7 @@ dataset = MultiKernelDataset('./data/kernels__cifar100-models', [
 
 The original DWP requires as one Variational Autoencoder per implicit prior, hence one per layer. In order to train autoencoders separately the following commands are required:
 ```bash
+# run `python ./experiments/vae.py --help` for documentation
 CUDA_VISIBLE_DEVICES=0 python ./experiments/vae.py \
     --manifest ./experiments/configs/vae7x7_conv0.json \
     --target ./experiments/vae7x7_conv0.gz
@@ -375,14 +376,62 @@ CUDA_VISIBLE_DEVICES=0 python ./experiments/vae.py \
     --manifest ./experiments/configs/vae5x5_conv3.json \
     --target ./experiments/vae5x5_conv3.gz
 ```
-Upon completion this creates four model snapshots in `./experiments/`. For parallel training it is better to run these in prallel detached `tmux` sessions from the root of the package.
+Upon completion this creates four model snapshots in `./experiments/`. For parallel training it is better to run these in parallel detached `tmux` sessions from the root of the package.
 
-To train a VAE on pooled kernel dataset of convolution form layers 1, 2, and 3 of `markovdwp.models.cifar.SourceCIFARNet` the following config shoud be used:
+To train a VAE on pooled kernel dataset of convolution form layers 1, 2, and 3 of `markovdwp.models.cifar.SourceCIFARNet` the following config should be used:
 ```bash
 python ./experiments/vae.py \
     --manifest ./experiments/configs/vae5x5_pooled.json \
     --target ./experiments/vae5x5_pooled.gz
 ```
+
+## Training models on new datasets with DWP
+
+Finally after the kernel datasets have been collected and the VAEs trained it becomes posible to train new Bayesian networks on new datasets with Deep Weight Priors. The following command run a single experiment `./experiments/configs/dwp.json` and stores the trained
+Bayesian network in `./data/dwp/`, but not the VAEs of the DWP.
+```bash
+# run `python ./experiments/dwp.py --help` for documentation
+python ./experiments/dwp.py --manifest "./experiments/configs/dwp.json" --target "./data/dwp/"  --gpus 0
+
+```
+Optional arguments to this experiment include:
+* `--priors` overrides training setting of the DWP encoders specified in the manifest (decoders are never retrained)
+  * `trainable` encoders are trained along with the main variation approximation
+  * `fixed` encoders are not trained and kept with their pre-trained parameters
+  * `collapsed` encoders in the VAEs are replaced by the latent variable's prior
+
+* `--init` override the parameter initialization specified in the manifest
+  * `default` use torch's default random init (layer specific)
+  * `prior` sample kernels from the VAE associated with thE DWP
+  * `<path>` the path to kernel dataset, which to sample kernels from
+
+The grid search version of this experiment uses (wandb sweeps)[https://docs.wandb.com/sweeps] which facilitate and greatly simplify massive parallel experimentation. The general procedure is to **create a sweep from a YAML sweep spec**, and then **spawn wandb agents** that communicate and fetch jobs from the wandb's sweep job server.
+The command:
+```bash
+wandb sweep ./experiments/sweeps/dwp.yaml
+```
+returns an agent spawner command that looks something like this
+```bash
+wandb agent "ivannz/DWP Grid Search Machine/z1o6k6hq"
+```
+
+Sweep specs for grid search experiments on Bayesian deep networks included in this package are:
+* `dwp.yaml` -- use DWP and the auxiliary ELBO proposed in [Atanov et al. (2019) eq. (7)](https://openreview.net/forum?id=ByGuynAct7)
+* `classic.yaml` -- uses Standard Gaussian prior on the weight's variational approximation, instead of the DWP
+* `sparsevd.yaml` -- uses log-uniform prior for Sparse Variational Dropout of [Molchanov et. al (2017) eq. (8)](http://proceedings.mlr.press/v70/molchanov17a.html) on the variational approximation, rather than the DWP
+
+Each sweep specifies the base experiment manifest and the necessary modifications to it that fulfil the desired experiment settings, and defines the hyperparameter grid:
+* `init` -- specify the initialization of the kernels of the Bayesian Network
+* `priors` -- specify how the encoders in the DWP are treated
+* `dataset__train__train_size` -- determines the size of the sample used for training
+* `order` -- a dummy variable that allows replicating the same experiment as many times as necessary
+
+Sweeps are distinct in the following parameters:
+* `model__cls` -- the class of the model used for training `markovdwp.models.cifar.BayesCIFARNetVD` or `markovdwp.models.cifar.BayesCIFARNetGaussian`
+* `options__kind` -- the training method
+  * `implicit` -- use the auxiliary ELBO proposed by [Atanov et al. (2019)](https://openreview.net/forum?id=ByGuynAct7)
+  * `classic` -- use the common ELBO proposed by [Kingma and Welling (2014)](https://openreview.net/forum?id=33X9fd2-9FyZd)
+
 
 # References
 
