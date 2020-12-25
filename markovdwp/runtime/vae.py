@@ -107,13 +107,14 @@ class SGVBRuntime(pl.LightningModule):
         kl = outputs['sgvb/kl-div'].mean()
         elbo = ll - beta * kl
 
-        return {'loss': -elbo,
-                'log': {
-                    'sgvb/elbo': elbo,
-                    'sgvb/loglik': ll,
-                    'sgvb/kl-div': kl,
-                    'sgvb/beta': beta,
-                }}
+        # log relevant metrics
+        self.log_dict({
+            'sgvb/elbo': elbo,
+            'sgvb/loglik': ll,
+            'sgvb/kl-div': kl,
+            'sgvb/beta': beta,
+        })
+        return -elbo
 
     def configure_optimizers(self):
         optim = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -219,11 +220,10 @@ class IWAERuntime(SGVBRuntime):
         return outputs
 
     def training_step_end(self, outputs):
-        sgvb = super().training_step_end(outputs)
+        # ignore sgvb loss, its log has been already cached
+        super().training_step_end(outputs)
 
+        # log iwae
         iwae = outputs['iwae'].mean()
-        return {'loss': -iwae,
-                'log': {
-                    'iwae': iwae,
-                    **sgvb['log']
-                }}
+        self.log('iwae', iwae)
+        return -iwae

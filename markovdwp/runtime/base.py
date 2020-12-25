@@ -51,12 +51,14 @@ class BaseClassificationRuntime(BaseRuntime):
 
         # 3. return loss components as floats grouping stats for brevity
         value, terms = weighted_sum({**model, **task}, **self.coef)
-        return {'loss': value, 'log': prepare_log(terms)}
+
+        self.log_dict(prepare_log(terms))
+        return value
 
     validation_step = training_step
 
     def validation_epoch_end(self, outputs):
-        return self.report_epoch_end(outputs, prefix='val')
+        self.log_dict(self.report_epoch_end(outputs, prefix='val'))
 
     def report_epoch_end(self, outputs, prefix='test'):
         prefixslash = prefix + ('/' if prefix else '')

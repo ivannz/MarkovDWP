@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
+from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
 
 
 def get_trainer(*, gpus, logger, max_epochs=0, **kwargs):
@@ -12,7 +12,7 @@ def get_trainer(*, gpus, logger, max_epochs=0, **kwargs):
         logger = None
 
     if logger is not None:
-        callbacks = [LearningRateLogger()]
+        callbacks = [LearningRateMonitor()]
         if max_epochs >= 1:
             # will inherit dirpath from logger
             checkpoint_callback = ModelCheckpoint()
