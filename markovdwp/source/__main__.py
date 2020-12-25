@@ -122,8 +122,7 @@ def generate_tags(config):
     return [dataset.__name__, model.__name__]
 
 
-# python -m 'markovdwp.source' <manifest> --gpus 2 3 
-def main(manifest, target=None, gpus=[3], tag=None, seed=None, debug=False):
+def main(manifest, target=None, gpus=[0], tag=None, seed=None, debug=False):
     breakpoint() if debug else None
 
     seed = fix_randomness(seed)
@@ -202,6 +201,6 @@ parser.add_argument(
     help='Enter trace mode.')
 
 # parser.add_argument('--no-save-optim', dest='save_optim', action='store_false')
-parser.set_defaults(target=None, debug=False, seed=None, tag=None, gpus=None)
+parser.set_defaults(target=None, debug=False, seed=None, tag=None, gpus=[0])
 
 main(**vars(parser.parse_args()))
