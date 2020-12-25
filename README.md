@@ -286,7 +286,7 @@ mkdir -p ./data/cifar100-models
 ```
 
 This creates a folder `./data/cifar100-models`, which the trained models will be saved into. Then the `source.sh` script is run which performs the following steps:
-1. Spawns **parallel `tmux` sessions, forked form the current bash environment**** under unique names, that retain environment variable settings.
+1. Spawns **parallel `tmux` sessions, forked form the current bash environment** under unique names, that retain environment variable settings.
 2. **Each session is assigned its gpu id** from the list. If the GPU id list has repeated ids, then a new session is forked and gets assigned the id. This allows to run different experiments on the same device **in isolation** for better resource utilization. No load balancing is performed other than this.
 3. Within each session 2 **experiments are run, one after another**, with the specified experiment **manifest** and saving results into the specified folder `./data/cifar100-models` under random unique names starting with `cifar100_model` prefix.
 
@@ -353,6 +353,35 @@ dataset = MultiKernelDataset('./data/kernels__cifar100-models', [
 #   n_models=100
 #   root="data/kernels__cifar100-models"
 # )
+```
+
+## Training Variational Autoencoders for the Deep Weight Prior
+
+The original DWP requires as one Variational Autoencoder per implicit prior, hence one per layer. In order to train autoencoders separately the following commands are required:
+```bash
+CUDA_VISIBLE_DEVICES=0 python ./experiments/vae.py \
+    --manifest ./experiments/configs/vae7x7_conv0.json \
+    --target ./experiments/vae7x7_conv0.gz
+
+CUDA_VISIBLE_DEVICES=0 python ./experiments/vae.py \
+    --manifest ./experiments/configs/vae5x5_conv1.json \
+    --target ./experiments/vae5x5_conv1.gz
+
+CUDA_VISIBLE_DEVICES=0 python ./experiments/vae.py \
+    --manifest ./experiments/configs/vae5x5_conv2.json \
+    --target ./experiments/vae5x5_conv2.gz
+
+CUDA_VISIBLE_DEVICES=0 python ./experiments/vae.py \
+    --manifest ./experiments/configs/vae5x5_conv3.json \
+    --target ./experiments/vae5x5_conv3.gz
+```
+Upon completion this creates four model snapshots in `./experiments/`. For parallel training it is better to run these in prallel detached `tmux` sessions from the root of the package.
+
+To train a VAE on pooled kernel dataset of convolution form layers 1, 2, and 3 of `markovdwp.models.cifar.SourceCIFARNet` the following config shoud be used:
+```bash
+python ./experiments/vae.py \
+    --manifest ./experiments/configs/vae5x5_pooled.json \
+    --target ./experiments/vae5x5_pooled.gz
 ```
 
 # References
