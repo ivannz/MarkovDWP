@@ -40,7 +40,8 @@ cd ./MarkovDWP-master
 
 pip install -e .
 
-chmod +x ./scripts/_source.sh ./scripts/source.sh ./scripts/dataset.sh
+chmod +x ./scripts/_source.sh ./scripts/source.sh
+chmod +x ./scripts/dataset.sh ./scripts/sweep.sh
 
 # run tests to ensure proper dependecies
 pytest
@@ -412,7 +413,11 @@ wandb sweep ./experiments/sweeps/dwp.yaml
 ```
 returns an agent spawner command that looks something like this
 ```bash
-wandb agent "ivannz/DWP Grid Search Machine/z1o6k6hq"
+wandb agent "<username>/DWP Grid Search Machine/z1o6k6hq"
+```
+Running this command launches a single agent, but without any control of what device it runs on. This issue can be solved by using the `sweep.sh` script, which automatically spawns a single isolated wandb agent on each id from the specified list of GPU ids. The following launches 3 agents per GPU, that are properly isolated from each other and maintain own GPU device and PRNG context.
+```bash
+./scripts/sweep.sh "<username>/DWP Slice Replication Machine TWO/z1o6k6hq" 0 0 0 1 1 1 2 2 2 3 3 3
 ```
 
 Sweep specs for grid search experiments on Bayesian deep networks included in this package are:
