@@ -101,6 +101,11 @@ def train(gpus, config, logger=None):
             SliceReconstructionLogger(ref_x.unsqueeze(1), ref_z,
                                       n_draws_is=1000, scatter=False))
 
+    # last-minute update of the config before training
+    logger.experiment.config.update(
+        flatten(config, delim='__'),
+        allow_val_change=True)
+
     # do the training
     try:
         pl_trainer.fit(pl_module, train_dataloader=feeds.get('train'))
@@ -167,8 +172,11 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None):
                          tags=tags)
 
     # sync with wandb's agent's arguments and rebuild the config
-    logger.experiment.config.setdefaults(flatten(parameters, delim='__'))
-    config = unflatten({**logger.experiment.config}, delim='__')
+    # XXX wandb's config keys should not collide with meaningful manifest's keys
+    config = unflatten({
+        **flatten(parameters, delim='__'),  # defaults from the manifest
+        **logger.experiment.config          # overrides from wandb
+    }, delim='__')
 
     # train the model
     encoder, decoder, prior = train(gpus, config, logger)

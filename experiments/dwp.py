@@ -172,8 +172,11 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None,
                          tags=tags)
 
     # sync with wandb's agent's arguments and rebuild the config
-    logger.experiment.config.setdefaults(flatten(parameters, delim='__'))
-    config = unflatten({**logger.experiment.config}, delim='__')
+    # XXX wandb's config keys should not collide with meaningful manifest's keys
+    config = unflatten({
+        **flatten(parameters, delim='__'),  # defaults from the manifest
+        **logger.experiment.config          # overrides from wandb
+    }, delim='__')
 
     # train the model
     model = train(gpus, config, logger)
