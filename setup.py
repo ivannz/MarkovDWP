@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='MarkovDWP',
-    version='0.7',
+    version='2020.12',
     description='''Backend for experiments with Deep Weight Prior''',
     license='MIT License',
     packages=[
@@ -24,7 +24,7 @@ setup(
         'torch>=1.5',
         'torchvision',
         'cplxmodule',
-        'pytorch-lightning',
+        'pytorch-lightning>=1.1',
         'sklearn',
         'wandb',
     ]
