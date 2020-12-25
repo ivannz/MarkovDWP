@@ -1,0 +1,46 @@
+{
+  "dataset": {
+    "train": {
+      "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR10_Train'>",
+      "root": "./data/",
+      "augmentation": "full",
+      "train_size": null,
+      "random_state": null
+    },
+    "test": {
+      "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR10_Test'>",
+      "root": "./data/",
+      "augmentation": "normalize"
+    }
+  },
+  "feeds": {
+    "train": {
+      "batch_size": 256,
+      "shuffle": true,
+      "pin_memory": true,
+      "num_workers": 6
+    },
+    "test": {
+      "batch_size": 256,
+      "shuffle": false,
+      "pin_memory": true,
+      "num_workers": 6
+    }
+  },
+  "trainer": {
+    "max_epochs": 3
+  },
+  "model": {
+    "cls": "<class 'markovdwp.models.cifar.SourceCIFARNet'>",
+    "k": 1.0,
+    "n_classes": 100
+  },
+  "options": {
+    "lr": 0.001,
+    "coef": {
+      "task.nll": 1.0,
+      "model.l2_norm.features": 0.0001,
+      "model.l2_norm.classifier": 0.0
+    }
+  }
+}
