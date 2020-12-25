@@ -182,7 +182,7 @@ parser.add_argument(
     help='The manifest of the experiment.')
 
 parser.add_argument(
-    'target', type=str, required=False,
+    '--target', type=str, required=False,
     help='The path where to store the trained model under a unique name.')
 
 parser.add_argument(
