@@ -1,0 +1,71 @@
+{
+  "dataset": {
+    "single": {
+      "cls": "<class 'markovdwp.source.KernelDataset'>",
+      "root": "/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/",
+      "source": "features.conv0",
+      "dim": "mio",
+      "min_norm": 0.2
+    },
+    "pooled": {
+      "cls": "<class 'markovdwp.source.LabelledKernelDataset'>",
+      "root": "/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/",
+      "sources": [
+        "features.conv1", 
+        "features.conv2",
+        "features.conv3"
+      ],
+      "dim": "mio",
+      "min_norm": 0.2,
+      "pad": "selection"
+    }
+  },
+  "resampling": {
+    "train": {
+      "source": "pooled",
+      "kind": "undersample",
+      "size": null,
+      "random_state": null
+    },
+    "reference": {
+      "source": "pooled",
+      "kind": "stratified",
+      "size": 256,
+      "random_state": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sollicitudin consectetur urna, eget consequat libero."
+    }
+  },
+  "feeds": {
+    "train": {
+      "batch_size": 256,
+      "shuffle": true,
+      "pin_memory": true,
+      "num_workers": 8
+    }
+  },
+  "trainer": {
+    "max_epochs": 300,
+    "track_grad_norm": 1.0,
+    "val_check_interval": 1.0,
+    "gradient_clip_val": 1.0,
+    "resume_from_checkpoint": null
+  },
+  "runtime": "<class 'markovdwp.runtime.vae.SGVBRuntime'>",
+  "vae": {
+    "encoder": {
+      "cls": "<class 'markovdwp.models.dwp.vae5x5.Encoder'>",
+      "h_dim": 64
+    },
+    "decoder": {
+      "cls": "<class 'markovdwp.models.dwp.vae5x5.Decoder'>",
+      "h_dim": 64
+    },
+    "options": {
+      "x_dim": 1,
+      "z_dim": 4
+    }
+  },
+  "options": {
+    "beta": 1.0,
+    "lr": 0.001
+  }
+}
