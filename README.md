@@ -22,7 +22,10 @@ unzip MarkovDWP-master.zip
 
 # local module installation
 cd ./MarkovDWP-master
+
 pip install -e .
+
+chmod +x ./scripts/_source.sh ./scripts/source.sh ./scripts/dataset.sh
 ```
 
 Run the following to see if the package has been installed properly
@@ -36,7 +39,7 @@ CUDA_VISIBLE_DEVICES=0 python -m markovdwp.source ./experiments/configs/prepare-
 
 ## Brief overview of the MarkovDWP package
 
-The package implements prior distributions, convolutional networks, ELBO and IWAE objectives, and training and logging methods automated experimentation pipeline. The objective of the package is replicate the original DWP paper and to provide reusable implementations of key objects: `ImplcitPrior`, `TensoRingPrior`, `KernelDataset` and etc.
+The package implements prior distributions, convolutional networks, ELBO and IWAE objectives, and training and logging methods automated experimentation pipeline. The objective of the package is replicate the original DWP paper and to provide reusable implementations of key objects: `ImplcitPrior`, `TensoRingPrior`, `SingleKernelDataset` and etc.
 
 The repo has the following structure:
 * `data` -- the folder where the data is expected to reside by default
@@ -234,6 +237,100 @@ Tensor Ring Induced Prior of [Kuznetsov et al. (2019)](http://papers.nips.cc/pap
 }
 ```
 `encoder` and `decoder` fields contain the class specs of the Encoder and the Decoder, respectively. `options` field allows non-redundant specification of shared parameters for both models. 
+
+
+## Obtaining source kernel datasets
+
+Source kernel dataset is built from the parameters of many convolutional networks trained on a common image dataset, e.g. `CIFAR100`.
+
+To train a **single model** on `gpu-0` it is necessary to run the following line from the root of the installed package:
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m markovdwp.source ./experiments/configs/cifar100-source.json --target ./data/single__cifar100-model.gz --tag cifar100-one-model
+```
+
+The file `./experiments/configs/cifar100-source.json` contains the manifest of the source kernel acquisition experiment, the resulting trained model of which is saved under the name `./data/single__cifar100-model.gz`.
+
+### Source models
+
+In order to get the complete source kernel dataset `./data/kernels__cifar100-models` we need
+to train a lot of CNN. For this the following command suffices:
+```bash
+mkdir -p ./data/cifar100-models
+
+# Train 2 models on each device (see doc in `./scripts/source.sh`)
+./scripts/source.sh 2 ./experiments/configs/cifar100-source.json \
+    ./data/cifar100-models "cifar100_model" 0 1 2 3
+```
+
+This creates a folder `./data/cifar100-models`, which the trained models will be saved into. Then the `source.sh` script is run which performs the following steps:
+1. Spawns **parallel `tmux` sessions, forked form the current bash environment**** under unique names, that retain environment variable settings.
+2. **Each session is assigned its gpu id** from the list. If the GPU id list has repeated ids, then a new session is forked and gets assigned the id. This allows to run different experiments on the same device **in isolation** for better resource utilization. No load balancing is performed other than this.
+3. Within each session 2 **experiments are run, one after another**, with the specified experiment **manifest** and saving results into the specified folder `./data/cifar100-models` under random unique names starting with `cifar100_model` prefix.
+
+### Source Kernel Datasets
+
+Kernel Datasets are special subclasses of `torch.utils.data.Dataset`, that allow seamless access to the convolution datasets collected from the trained models. However, before these object can be used, it is necessary to collect the kenrels form the trained models in a suitable format. After a sample of models has been trained the source kernel dataset is collected with the following command:
+```bash
+# see documentation in `dataset.sh`
+./scripts/dataset.sh ./data/cifar100-models
+
+# python -m markovdwp.source.kernel ./data/cifar100-models
+```
+
+This automatically creates a folder next to `./data/cifar100-models` with the name `./data/kernels__cifar100-models` (just adds the `kernels__` prefix to the base name). In this new folder the script creates `meta.json` and a bunch of binary files, storing the trained weights of each convolutional layer pooled from all models in a consistent order.
+
+The JSON file contains important meta information on the collected dataset:
+* the shape, data type and storage of convolutions from a specific layer of the common model's architecture
+* paths to snapshots of the trained models in exactly the same order as the convolution kernels in each layer
+* the experiment manifest uset to train all models
+
+The following piece specifies a kernel dataset of a **7x7** convolution layer `features.conv0` (key) with **3 input** and **128 output** channels collected from **100 models** (`shape` field). The tensor of type **float32** (`dtype` field) is stored in flat file format in *opaquely named binary file* **vqbxr3rlb.bin** (`vault` field).
+```json
+{
+  "dataset": {
+    "features.conv0": {
+      "shape": [100, 128, 3, 7, 7],
+      "dtype": "torch.float32",
+      "vault": "vqbxr3rlb.bin"
+    }
+  }
+}
+```
+
+Two kinds of source kernel dataset objects are implemented: `SingleKernelDataset` and `MultiKernelDataset`. Each dataset returns a slice of a convolution kernel and a consistent label associated with the layer, where it came from.
+
+* `SingleKernelDataset` -- a dataset of kernels from a single layer, any convolution kernel slicing is supported: 'm' by model, 'i' by inputs, 'o' outputs and combinations thereof.
+* `MultiKernelDataset` -- a dataset of kernels from several, possible incompatible layers, that pads the spatial dimensions of smaller layers to the common shape. Only spatial slices are supported.
+
+The objects can be used like this:
+```python
+from markovdwp.source import SingleKernelDataset, MultiKernelDataset
+
+# ream and validate the kenel dataset
+info = SingleKernelDataset.info('./data/kernels__cifar100-models')
+print(info.keys())
+# >>> dict_keys(['features.conv0', 'features.conv1', 'features.conv2', 'features.conv3'])
+
+dataset = SingleKernelDataset('./data/kernels__cifar100-models', 'features.conv2')
+# SingleKernelDataset(
+#   source=`features.conv2`
+#   kernel=(5, 5)
+#   dim=(0, 1, 2)
+#   n_models=100
+#   root="data/kernels__cifar100-models"
+# )
+
+dataset = MultiKernelDataset('./data/kernels__cifar100-models', [
+    'features.conv0',
+    'features.conv2'
+])
+# MultiKernelDataset(
+#   source=`('features.conv0', 'features.conv2')`
+#   kernel=(7, 7)
+#   n_models=100
+#   root="data/kernels__cifar100-models"
+# )
+```
 
 # References
 
