@@ -1,15 +1,15 @@
 {
   "dataset": {
     "single": {
-      "cls": "<class 'markovdwp.source.KernelDataset'>",
-      "root": "/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/",
+      "cls": "<class 'markovdwp.source.SingleKernelDataset'>",
+      "root": "./data/kernels__cifar100-models/",
       "source": "features.conv0",
       "dim": "mio",
       "min_norm": 0.2
     },
     "pooled": {
-      "cls": "<class 'markovdwp.source.LabelledKernelDataset'>",
-      "root": "/home/ivan.nazarov/Github/MarkovDWP/data/kernels__cifar100-models/",
+      "cls": "<class 'markovdwp.source.MultiKernelDataset'>",
+      "root": "./data/kernels__cifar100-models/",
       "sources": [
         "features.conv1", 
         "features.conv2",
