@@ -9,6 +9,8 @@
 #
 #  see `./_source.sh` for details
 
+_SOURCE="$(dirname $(realpath ${0}))/_source.sh"
+
 n_repl="${1}"; shift
 manifest="${1}"; shift
 target="${1}"; shift
@@ -25,7 +27,7 @@ for device in "$@"; do
     # the environment, from where tmux was launched.
     tmux new-session -d -s "${name}" \
         env CUDA_VISIBLE_DEVICES=${device} \
-            ./_source.sh ${n_repl} "${manifest}" "${target}" --gpus 0 --tag "${tag}"
+            "${_SOURCE}" ${n_repl} "${manifest}" "${target}" --gpus 0 --tag "${tag}"
 
     # wait for 2-7 seconds
     sleep $((2 + RANDOM % 5));
