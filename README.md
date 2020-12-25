@@ -4,16 +4,31 @@ The reviews of the Deep Weight Prior, proposed by [Atanov et al. (2019)](https:/
 
 In this project we set out to find a solution, a hierarchical model, that would enable generation of interdependent slices for the filter bank of a single convolutional layer. Having achieved a substantial result, we could explore further tentative directions: generative model for entire layers, progressive growth of neural networks in architecture search.
 
-## Installation
+## Setup
 
-The base stack is `python>=3.8`, `torch>=1.5` as the backend, `wandb` for reporting and `pytorch-lighting` as the framework.
+### Environment
+The base stack is `python>=3.7`, `torch>=1.5` as the backend, `wandb` for reporting and `pytorch-lighting=0.9.1` as the framework.
 
 For example, you can setup the following *conda* environment
 ```bash
 conda create -n pysandbox "python>=3.7" pip cython numpy mkl numba scipy scikit-learn \
 jupyter ipython pytest "conda-forge::compilers>=1.0.4" conda-forge::llvm-openmp \
 matplotlib pytorch::pytorch pytorch::torchvision pytorch::torchaudio "cudatoolkit=10.2"
+
+conda activate pysandbox
 ```
+
+### Reporting Backend
+
+Before using the package it is necessary to insall and setup Weights and Biases. Please follow these [quickstart instructions](https://docs.wandb.com/quickstart). The essential steps are provided below
+
+```bash
+pip install wandb
+
+wandb login
+```
+
+### Package installation
 
 To install unzip or clone the repository of the package
 ```bash
@@ -26,6 +41,9 @@ cd ./MarkovDWP-master
 pip install -e .
 
 chmod +x ./scripts/_source.sh ./scripts/source.sh ./scripts/dataset.sh
+
+# run tests to ensure proper dependecies
+pytest
 ```
 
 Run the following to see if the package has been installed properly
