@@ -38,8 +38,8 @@ def get_pad(shape, *, to):
     return pad
 
 
-class KernelDataset(Dataset):
-    """Source convolutional kernel dataset.
+class SingleKernelDataset(Dataset):
+    """Convolutional source kernel dataset from a single layer.
 
     Parameters
     ----------
@@ -175,8 +175,8 @@ class KernelDataset(Dataset):
         return type(self).__name__ + '(\n  ' + '\n  '.join(pieces) + '\n)'
 
 
-class LabelledKernelDataset(KernelDataset):
-    """Labelled source convolutional kernel dataset.
+class MultiKernelDataset(SingleKernelDataset):
+    """Convolutional kernel dataset from multiple layers simultaneously.
 
     Parameters
     ----------
@@ -187,12 +187,12 @@ class LabelledKernelDataset(KernelDataset):
         Specifies convolutions of which layers to load. `str` loads
         convolutions from a single layer, `list` -- from several lists,
         `None` loads from all available layers. Class labels of each slice
-        are consistent and determined uniquely byt the metainfo of the
+        are consistent and determined uniquely by the metainfo of the
         dataset under `root`.
 
     min_norm : dict of floats, or float, default=1e-2
         Filter the source datasets by the specified minimal ell_2 norm.
-        Different thershold can be specified for each source.
+        Different threshold can be specified for each source.
 
     dim : str, or None, default='mio'
         Independence assumption used to slice the dataset. Currently
@@ -342,3 +342,11 @@ class LabelledKernelDataset(KernelDataset):
         pieces.append(f'root="{self.root}"')
 
         return type(self).__name__ + '(\n  ' + '\n  '.join(pieces) + '\n)'
+
+
+class KernelDataset(SingleKernelDataset):
+    pass
+
+
+class LabelledKernelDataset(MultiKernelDataset):
+    pass
