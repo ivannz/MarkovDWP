@@ -1,16 +1,16 @@
-project: 'DWP VAE Production Line'
+project: 'Variatonal Autoencoders Grid'
 description: 'Run many experiments for vae7x7'
 
-program: vae.py
+program: ./experiments/vae.py
 method: grid
 
 parameters:
   tags:
     value: 'slice-vae, Slices VAE'
   manifest: # base experiment manifest
-    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/configs/vae7x7.json'
+    value: './experiments/configs/vae7x7_conv0.json'
   target: # the directory whereto the vaes are saved
-    value: '/home/ivan.nazarov/Github/MarkovDWP/experiments/snapshots-slice_vae/'
+    value: './experiments/snapshots-slice_vae/'
   runtime:
     values:
       - "<class 'markovdwp.runtime.vae.SGVBRuntime'>"
