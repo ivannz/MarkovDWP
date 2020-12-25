@@ -85,14 +85,16 @@ To build class-specs of new objects one can do:
 import torch
 
 # A qualified name lets you re-import the exact same object
-print(str(torch.nn.Conv2d))
-# >>> <class 'torch.nn.modules.conv.Conv2d'>
+print(str(torch.nn.ConvTranspose2d))
+# >>> <class 'torch.nn.modules.conv.ConvTranspose2d'>
 
 class_spec = {
-    'cls': str(torch.nn.Conv2d),
-    'in_features': 16,
-    'out_features': 32,
-    'bias': False
+    'cls': str(torch.nn.ConvTranspose2d),
+    'in_channels': 16,
+    'out_channels': 32,
+    'kernel_size': 3,
+    'stride': 1,
+    'bias': True
 }
 ```
 
@@ -245,7 +247,10 @@ Source kernel dataset is built from the parameters of many convolutional network
 
 To train a **single model** on `gpu-0` it is necessary to run the following line from the root of the installed package:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python -m markovdwp.source ./experiments/configs/cifar100-source.json --target ./data/single__cifar100-model.gz --tag cifar100-one-model
+CUDA_VISIBLE_DEVICES=0 python -m markovdwp.source \
+    ./experiments/configs/cifar100-source.json \
+    --target ./data/single__cifar100-model.gz \
+    --tag cifar100-one-model
 ```
 
 The file `./experiments/configs/cifar100-source.json` contains the manifest of the source kernel acquisition experiment, the resulting trained model of which is saved under the name `./data/single__cifar100-model.gz`.
