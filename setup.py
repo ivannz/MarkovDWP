@@ -26,5 +26,6 @@ setup(
         'cplxmodule',
         'pytorch-lightning',
         'sklearn',
+        'wandb',
     ]
 )
