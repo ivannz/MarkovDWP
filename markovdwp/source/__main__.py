@@ -7,6 +7,7 @@ import time
 import json
 import argparse
 import tempfile  # cleverly uses a separate instance of random's PRGN
+import warnings
 
 import torch  # has its own PRNGs, but torchvision also uses `random`
 import numpy as np  # preemptively import to seed it's default PRNG
@@ -23,6 +24,10 @@ from functools import partial
 from ..runtime.utils.common import linear
 
 from ..utils.vendor.pytorch_lightning import GradInformation
+
+
+class NoTargetWarning(UserWarning):
+    pass
 
 
 class ClassificationRuntime(GradInformation, BaseClassificationRuntime):
@@ -118,7 +123,7 @@ def generate_tags(config):
 
 
 # python -m 'markovdwp.source' <manifest> --gpus 2 3 
-def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
+def main(manifest, target=None, gpus=[3], tag=None, seed=None, debug=False):
     breakpoint() if debug else None
 
     seed = fix_randomness(seed)
@@ -132,7 +137,12 @@ def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
     config = json.load(open(manifest, 'tr'))
 
     # save under a random name if target is a directory
-    if os.path.isdir(target):
+    if target is None:
+        # do not save anything
+        warnings.warn('No target path specified, the model will not be saved'.
+                      NoTargetWarning)
+
+    elif os.path.isdir(target):
         # > Caller is responsible for deleting the [temporary] file
         # > when done with it.
         # -- We close it, but never delete it
@@ -151,13 +161,16 @@ def main(manifest, target, gpus=[3], tag=None, seed=None, debug=False):
     model = train(gpus, config, logger)
 
     # store the model next to the manifest
-    with gzip.open(target, 'wb', compresslevel=9) as fout:
-        torch.save({
-            '__dttm__': time.strftime('%Y%m%d %H%M%S'),
-            '__seed__': seed,
-            'config': config,
-            'state': model.state_dict(),
-        }, fout)
+    if target is not None:
+        with gzip.open(target, 'wb', compresslevel=9) as fout:
+            torch.save({
+                '__dttm__': time.strftime('%Y%m%d %H%M%S'),
+                '__seed__': seed,
+                'config': config,
+                'state': model.state_dict(),
+            }, fout)
+
+    return model
 
 
 parser = argparse.ArgumentParser(
@@ -169,7 +182,7 @@ parser.add_argument(
     help='The manifest of the experiment.')
 
 parser.add_argument(
-    'target', type=str,
+    'target', type=str, required=False,
     help='The path where to store the trained model under a unique name.')
 
 parser.add_argument(
@@ -189,6 +202,6 @@ parser.add_argument(
     help='Enter trace mode.')
 
 # parser.add_argument('--no-save-optim', dest='save_optim', action='store_false')
-parser.set_defaults(debug=False, seed=None, tag=None, gpus=None)
+parser.set_defaults(target=None, debug=False, seed=None, tag=None, gpus=None)
 
 main(**vars(parser.parse_args()))
