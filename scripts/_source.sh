@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Train a number of source models.
+# Train a number of source models in a single porcess on the specified gpus.
 #
 # $ ./source.sh `N` `manifset` `target` `--gpus 3` `--tag cifar100`
 #
