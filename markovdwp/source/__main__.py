@@ -153,7 +153,8 @@ def main(manifest, target=None, gpus=[0], tag=None, seed=None, debug=False):
         raise ValueError(f'`{target}` already exists! Refusing to proceed.')
 
     # pl's Wandb logger uses reinit=true! so update config here
-    logger = WandbLogger(tags=[*generate_tags(config)])
+    logger = WandbLogger(project='Source Models',
+                         tags=[*generate_tags(config)])
     logger.experiment.config.update(config)
 
     # train the model

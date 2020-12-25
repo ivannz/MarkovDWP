@@ -168,7 +168,8 @@ def main(manifest, target=None, gpus=[0], debug=False, tags=None,
 
     # pl's Wandb logger uses reinit=true!
     # wandb.init(project='DWP Slice Replication Machine', reinit=False)
-    logger = WandbLogger(project='DWP Slice Replication Machine', tags=tags)
+    logger = WandbLogger(project='Training with Deep Weight Prior',
+                         tags=tags)
 
     # sync with wandb's agent's arguments and rebuild the config
     logger.experiment.config.setdefaults(flatten(parameters, delim='__'))
