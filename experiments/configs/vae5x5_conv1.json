@@ -1,0 +1,53 @@
+{
+  "dataset": {
+    "single": {
+      "cls": "<class 'markovdwp.source.KernelDataset'>",
+      "root": "./data/kernels__cifar100-models/",
+      "source": "features.conv1",
+      "dim": "mio",
+      "min_norm": 0.5
+    }
+  },
+  "resampling": {
+    "train": "single",
+    "reference": {
+      "source": "single",
+      "kind": "subset",
+      "random_state": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sollicitudin consectetur urna, eget consequat libero.",
+      "size": 256
+    }
+  },
+  "feeds": {
+    "train": {
+      "batch_size": 256,
+      "shuffle": true,
+      "pin_memory": true,
+      "num_workers": 8
+    }
+  },
+  "trainer": {
+    "max_epochs": 300,
+    "track_grad_norm": 0.0,
+    "val_check_interval": 1.0,
+    "resume_from_checkpoint": null
+  },
+  "runtime": "<class 'markovdwp.runtime.vae.SGVBRuntime'>",
+  "vae": {
+    "encoder": {
+      "cls": "<class 'markovdwp.models.dwp.vae5x5.Encoder'>",
+      "h_dim": 64
+    },
+    "decoder": {
+      "cls": "<class 'markovdwp.models.dwp.vae5x5.Decoder'>",
+      "h_dim": 64
+    },
+    "options": {
+      "x_dim": 1,
+      "z_dim": 4
+    }
+  },
+  "options": {
+    "beta": 1.0,
+    "lr": 0.001
+  }
+}
