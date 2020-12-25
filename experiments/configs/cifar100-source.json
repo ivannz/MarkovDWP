@@ -2,14 +2,14 @@
   "dataset": {
     "train": {
       "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR100_Train'>",
-      "root": "/home/ivan.nazarov/Github/complex_paper/experiments/cifar/data/",
+      "root": "./data/",
       "augmentation": "full",
       "train_size": null,
       "random_state": null
     },
     "test": {
       "cls": "<class 'markovdwp.source.datasets.cifar.CIFAR100_Test'>",
-      "root": "/home/ivan.nazarov/Github/complex_paper/experiments/cifar/data/",
+      "root": "./data/",
       "augmentation": "normalize"
     }
   },
